@@ -591,6 +591,219 @@ async def check_redemption_status(redemption_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+# ==================== TRADING ROUTES (AMM) ====================
+
+from xrpl.models.requests import AMMInfo
+from xrpl.models.amounts import IssuedCurrencyAmount as ICA
+
+@app.get("/api/pool/info")
+async def get_pool_info():
+    """
+    Get AMM pool information
+    
+    Returns:
+    - Pool address
+    - Token reserves  
+    - XRP reserves
+    - Current price
+    - Trading fee
+    """
+    try:
+        pool_created = await SystemConfigDB.is_pool_created()
+        
+        if not pool_created:
+            return {
+                "pool_exists": False,
+                "message": "AMM pool not yet created. Currently in IPO phase."
+            }
+        
+        # Query XRPL for pool info
+        from xrpl.clients import JsonRpcClient
+        client = JsonRpcClient(xrpl_config.client_url)
+        
+        amm_info_request = AMMInfo(
+            asset=ICA(
+                currency=xrpl_config.currency_code,
+                issuer=xrpl_config.issuer_address,
+                value="0"
+            ),
+            asset2={"currency": "XRP"}
+        )
+        
+        response = client.request(amm_info_request)
+        
+        if not response.is_successful():
+            raise HTTPException(status_code=404, detail="Pool not found on ledger")
+        
+        amm_data = response.result.get("amm", {})
+        
+        # Parse reserves
+        amount1 = amm_data.get("amount", {})
+        amount2 = amm_data.get("amount2", "0")
+        
+        # Token reserve
+        if isinstance(amount1, dict):
+            token_reserve = float(amount1.get("value", 0))
+        else:
+            token_reserve = float(amount1) / 1_000_000  # XRP in drops
+        
+        # XRP reserve  
+        if isinstance(amount2, dict):
+            xrp_reserve = float(amount2.get("value", 0))
+        else:
+            xrp_reserve = float(amount2) / 1_000_000
+        
+        # Calculate price (XRP per token)
+        current_price = xrp_reserve / token_reserve if token_reserve > 0 else 0
+        
+        return {
+            "pool_exists": True,
+            "pool_address": amm_data.get("account"),
+            "token_reserve": token_reserve,
+            "xrp_reserve": xrp_reserve,
+            "current_price_xrp": current_price,
+            "current_price_usd": current_price,  # Assuming 1 XRP = 1 USD for demo
+            "trading_fee": amm_data.get("trading_fee", 0) / 100,  # Convert basis points to %
+            "lp_token": amm_data.get("lp_token", {}).get("currency")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TradeQuoteRequest(BaseModel):
+    """Request for trade quote"""
+    from_currency: str  # "IND" or "XRP"
+    to_currency: str    # "IND" or "XRP"  
+    amount: float = Field(..., gt=0)
+
+
+@app.post("/api/trade/quote")
+async def get_trade_quote(request: TradeQuoteRequest):
+    """
+    Get quote for a trade (how much you'll receive)
+    
+    Uses constant product formula: x * y = k
+    With fee: output = (input * 0.995 * y) / (x + input * 0.995)
+    """
+    try:
+        # Get pool info
+        pool_info = await get_pool_info()
+        
+        if not pool_info.get("pool_exists"):
+            raise HTTPException(status_code=400, detail="Pool not available")
+        
+        token_reserve = pool_info["token_reserve"]
+        xrp_reserve = pool_info["xrp_reserve"]
+        fee_percent = pool_info["trading_fee"]
+        
+        # Determine direction
+        if request.from_currency == xrpl_config.currency_code and request.to_currency == "XRP":
+            # Selling tokens for XRP
+            input_amount = request.amount
+            input_reserve = token_reserve
+            output_reserve = xrp_reserve
+        elif request.from_currency == "XRP" and request.to_currency == xrpl_config.currency_code:
+            # Buying tokens with XRP
+            input_amount = request.amount
+            input_reserve = xrp_reserve
+            output_reserve = token_reserve
+        else:
+            raise HTTPException(status_code=400, detail="Invalid currency pair")
+        
+        # Calculate output with fee
+        # Formula: output = (input * (1 - fee) * output_reserve) / (input_reserve + input * (1 - fee))
+        fee_multiplier = 1 - (fee_percent / 100)
+        input_after_fee = input_amount * fee_multiplier
+        
+        output_amount = (input_after_fee * output_reserve) / (input_reserve + input_after_fee)
+        
+        # Price impact
+        price_before = output_reserve / input_reserve
+        price_after = (output_reserve - output_amount) / (input_reserve + input_amount)
+        price_impact = abs((price_after - price_before) / price_before) * 100
+        
+        return {
+            "from_currency": request.from_currency,
+            "to_currency": request.to_currency,
+            "input_amount": request.amount,
+            "output_amount": output_amount,
+            "price": output_amount / request.amount,
+            "price_impact": price_impact,
+            "fee": request.amount * (fee_percent / 100),
+            "minimum_received": output_amount * 0.99,  # 1% slippage tolerance
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TradeHistoryResponse(BaseModel):
+    """Recent trades on the pool"""
+    trades: List[dict]
+    total_volume_24h: float
+
+
+@app.get("/api/trade/history", response_model=TradeHistoryResponse)
+async def get_trade_history(limit: int = 20):
+    """
+    Get recent trade history from the pool
+    
+    Note: This queries XRPL transaction history
+    """
+    try:
+        pool_info = await get_pool_info()
+        
+        if not pool_info.get("pool_exists"):
+            return TradeHistoryResponse(trades=[], total_volume_24h=0)
+        
+        pool_address = pool_info["pool_address"]
+        
+        # Query XRPL for recent transactions
+        from xrpl.clients import JsonRpcClient
+        from xrpl.models.requests import AccountTx
+        
+        client = JsonRpcClient(xrpl_config.client_url)
+        
+        response = client.request(AccountTx(
+            account=pool_address,
+            ledger_index_min=-1,
+            ledger_index_max=-1,
+            limit=limit
+        ))
+        
+        trades = []
+        total_volume = 0
+        
+        for tx_data in response.result.get("transactions", []):
+            tx = tx_data.get("tx", {})
+            meta = tx_data.get("meta", {})
+            
+            # Only include successful swaps
+            if meta.get("TransactionResult") != "tesSUCCESS":
+                continue
+            
+            # Parse trade data (simplified)
+            trades.append({
+                "tx_hash": tx.get("hash"),
+                "timestamp": tx.get("date"),
+                "type": tx.get("TransactionType"),
+            })
+        
+        return TradeHistoryResponse(
+            trades=trades,
+            total_volume_24h=total_volume
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ==================== INVESTOR DASHBOARD ====================
 
