@@ -457,42 +457,6 @@ async def check_purchase_status(purchase_id: str):
 
 # ==================== PHASE 3: POOL & MARKET INFO ROUTES ====================
 
-@app.get("/api/pool/info", response_model=PoolInfoResponse)
-async def get_pool_info():
-    """
-    Get current AMM pool information
-    
-    - Returns pool reserves and current market price
-    - Trading fee percentage
-    - Liquidity provider info
-    """
-    try:
-        pool_created = await SystemConfigDB.is_pool_created()
-        
-        if not pool_created:
-            return PoolInfoResponse(
-                pool_address=None,
-                usdc_reserve=None,
-                token_reserve=None,
-                current_price=None,
-                trading_fee=None,
-                message="AMM pool not yet created. Currently in IPO phase."
-            )
-        
-        # TODO: Query XRPL for actual pool info
-        # For now, return placeholder
-        return PoolInfoResponse(
-            pool_address="rPOOL...",
-            usdc_reserve=100000.0,
-            token_reserve=100000.0,
-            current_price=1.0,
-            trading_fee=0.5,
-            message="Pool is active. Trade directly on XRPL or use DEX interface."
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/api/nav", response_model=NAVResponse)
 async def get_current_nav():
     """
@@ -599,17 +563,8 @@ from xrpl.models.requests import AMMInfo
 from xrpl.models.amounts import IssuedCurrencyAmount as ICA
 
 @app.get("/api/pool/info")
-async def get_pool_info():
-    """
-    Get AMM pool information
-    
-    Returns:
-    - Pool address
-    - Token reserves  
-    - XRP reserves
-    - Current price
-    - Trading fee
-    """
+async def get_pool_info_route():
+    """Get AMM pool information"""
     try:
         pool_created = await SystemConfigDB.is_pool_created()
         
@@ -619,23 +574,34 @@ async def get_pool_info():
                 "message": "AMM pool not yet created. Currently in IPO phase."
             }
         
-        # Query XRPL for pool info
+        # Query XRPL for pool info - run in thread pool
         from xrpl.clients import JsonRpcClient
-        client = JsonRpcClient(xrpl_config.client_url)
+        import asyncio
         
-        amm_info_request = AMMInfo(
-            asset=ICA(
-                currency=xrpl_config.currency_code,
-                issuer=xrpl_config.issuer_address,
-                value="0"
-            ),
-            asset2={"currency": "XRP"}
-        )
+        def query_amm_pool():
+            """Sync function to query pool"""
+            client = JsonRpcClient(xrpl_config.client_url)
+            
+            amm_info_request = AMMInfo(
+                asset=ICA(
+                    currency=xrpl_config.currency_code,
+                    issuer=xrpl_config.issuer_address,
+                    value="0"
+                ),
+                asset2={"currency": "XRP"}
+            )
+            
+            return client.request(amm_info_request)
         
-        response = client.request(amm_info_request)
+        # Run sync function in thread pool
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, query_amm_pool)
         
         if not response.is_successful():
-            raise HTTPException(status_code=404, detail="Pool not found on ledger")
+            return {
+                "pool_exists": False,
+                "message": "Pool not found on ledger"
+            }
         
         amm_data = response.result.get("amm", {})
         
@@ -647,7 +613,7 @@ async def get_pool_info():
         if isinstance(amount1, dict):
             token_reserve = float(amount1.get("value", 0))
         else:
-            token_reserve = float(amount1) / 1_000_000  # XRP in drops
+            token_reserve = float(amount1) / 1_000_000
         
         # XRP reserve  
         if isinstance(amount2, dict):
@@ -655,7 +621,7 @@ async def get_pool_info():
         else:
             xrp_reserve = float(amount2) / 1_000_000
         
-        # Calculate price (XRP per token)
+        # Calculate price
         current_price = xrp_reserve / token_reserve if token_reserve > 0 else 0
         
         return {
@@ -664,8 +630,8 @@ async def get_pool_info():
             "token_reserve": token_reserve,
             "xrp_reserve": xrp_reserve,
             "current_price_xrp": current_price,
-            "current_price_usd": current_price,  # Assuming 1 XRP = 1 USD for demo
-            "trading_fee": amm_data.get("trading_fee", 0) / 100,  # Convert basis points to %
+            "current_price_usd": current_price,
+            "trading_fee": amm_data.get("trading_fee", 0) / 100,
             "lp_token": amm_data.get("lp_token", {}).get("currency")
         }
         
@@ -673,8 +639,7 @@ async def get_pool_info():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
+    
 class TradeQuoteRequest(BaseModel):
     """Request for trade quote"""
     from_currency: str  # "IND" or "XRP"
