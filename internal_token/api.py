@@ -1,5 +1,5 @@
 """
-AI Fund API Server
+Token Manager API Server
 FastAPI server for managing investor onboarding, purchases, redemptions, and NAV
 """
 
@@ -58,8 +58,8 @@ async def lifespan(app: FastAPI):
     print("✓ API Server stopped")
 
 app = FastAPI(
-    title="AI Fund API",
-    description="API for managing tokenized AI investment fund",
+    title="Indicia Labs Token API",
+    description="API for managing tokenized fund",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -910,7 +910,7 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     
-    print(f"Starting AI Fund API Server on {API_HOST}:{API_PORT}")
+    print(f"Starting Indicia Token API Server on {API_HOST}:{API_PORT}")
     print(f"Debug mode: {API_DEBUG}")
     print(f"Docs available at: http://{API_HOST}:{API_PORT}/docs")
     
