@@ -212,6 +212,34 @@ class PurchaseDB:
         return dict(row) if row else None
     
     @staticmethod
+    async def get_all_pending() -> List[Dict[str, Any]]:
+        """Get all pending purchases"""
+        rows = await db.fetch(
+            """
+            SELECT * FROM purchases 
+            WHERE status = 'pending'
+            ORDER BY created_at DESC
+            """
+        )
+        return [dict(row) for row in rows]
+    
+    @staticmethod
+    async def get_incomplete() -> List[Dict[str, Any]]:
+        """
+        Get purchases that received payment but weren't completed
+        (have deposit_tx_hash but status is not 'completed')
+        """
+        rows = await db.fetch(
+            """
+            SELECT * FROM purchases 
+            WHERE deposit_tx_hash IS NOT NULL 
+            AND status IN ('pending', 'forwarded')
+            ORDER BY created_at ASC
+            """
+        )
+        return [dict(row) for row in rows]
+    
+    @staticmethod
     async def get_pending_by_tag(destination_tag: int) -> Optional[Dict[str, Any]]:
         """Get pending purchase by destination tag"""
         row = await db.fetchrow(

@@ -320,51 +320,90 @@ class TransactionMonitor:
                     print(f"Error in message loop: {e}")
                     continue
     
-    async def check_recent_transactions(self):
-        """Check recent transactions on startup (in case we missed any)"""
-        print("\nChecking for recent unprocessed transactions...")
+    async def check_missed_payments(self):
+        """
+        Check XRPL for payments that arrived while monitor was down
+        Matches XRPL transactions to pending purchases by destination tag
+        """
+        print("\nChecking for missed payments on startup...")
         
         from xrpl.asyncio.clients import AsyncJsonRpcClient
         
         try:
-            async with AsyncJsonRpcClient(xrpl_config.client_url) as client:
-                # Get recent transactions
-                response = await client.request(AccountTx(
-                    account=self.deposit_address,
-                    ledger_index_min=-1,
-                    ledger_index_max=-1,
-                    limit=20
-                ))
+            # Step 1: Get all pending purchases
+            pending = await PurchaseDB.get_all_pending()
             
-                transactions = response.result.get('transactions', [])
-                    
-                print(f"Found {len(transactions)} recent transactions")
+            if not pending:
+                print("No pending purchases found.")
+                return
+            
+            print(f"Found {len(pending)} pending purchase(s)")
+            
+            # Step 2: Get account transactions with proper parameters
+            client = AsyncJsonRpcClient(xrpl_config.client_url)
+            
+            # Request more transactions by specifying ledger range
+            response = await client.request(AccountTx(
+                account=self.deposit_address,
+                ledger_index_min=-1,  # earliest ledger
+                ledger_index_max=-1,  # latest ledger  
+                limit=400
+            ))
+            
+            all_txs = response.result.get('transactions', [])
+            print(f"  Fetched {len(all_txs)} transactions from XRPL")
                 
-                for tx_data in transactions:
-                    tx = tx_data.get('tx', {})
+            # Step 3: For each pending purchase, search for matching transaction
+            for purchase in pending:
+                dest_tag = purchase['destination_tag']
+                print(f"\n  Searching for payment with destination tag {dest_tag}...")
+                
+                # Search for matching transaction
+                matched_tx = None
+                for tx_data in all_txs:
+                    # Use tx_json not tx!
+                    tx = tx_data.get('tx_json', {})
                     meta = tx_data.get('meta', {})
+                    tx_hash = tx_data.get('hash')
                     
-                    # Only process successful payments
-                    if tx.get('TransactionType') != 'Payment':
-                        continue
+                    # Check if this is our payment
+                    if (tx.get('TransactionType') == 'Payment' and
+                        tx.get('Destination') == self.deposit_address and
+                        tx.get('DestinationTag') == dest_tag and
+                        meta.get('TransactionResult') == 'tesSUCCESS'):
+                        
+                        matched_tx = {
+                            'tx': tx,
+                            'meta': meta,
+                            'hash': tx_hash
+                        }
+                        break
+                
+                # Step 4: If found, process the payment
+                if matched_tx:
+                    tx_hash = matched_tx['hash']
+                    print(f"    ✓ Found transaction: {tx_hash}")
                     
-                    if meta.get('TransactionResult') != 'tesSUCCESS':
-                        continue
+                    # Create message structure for process_usdc_deposit
+                    message = {
+                        'type': 'transaction',
+                        'tx_json': matched_tx['tx'],
+                        'hash': tx_hash,
+                        'meta': matched_tx['meta'],
+                        'validated': True
+                    }
                     
-                    # Check if already processed
-                    tx_hash = tx.get('hash')
-                    if tx_hash in self.processed_txs:
-                        continue
-                    
-                    # Only incoming transactions
-                    if tx.get('Destination') != self.deposit_address:
-                        continue
-                    
-                    print(f"\nFound unprocessed transaction: {tx_hash}")
-                    await self.process_usdc_deposit(tx)
+                    # Process the deposit
+                    await self.process_usdc_deposit(message)
+                else:
+                    print(f"    ⊘ Payment not found (not yet sent)")
+            
+            print("\n✓ Missed payment check complete")
             
         except Exception as e:
-            print(f"Error checking recent transactions: {e}")
+            print(f"Error checking missed payments: {e}")
+            import traceback
+            traceback.print_exc()
     
     def stop(self):
         """Stop monitoring"""
@@ -381,8 +420,8 @@ async def main():
     monitor = TransactionMonitor()
     
     try:
-        # Check for any recent unprocessed transactions
-        await monitor.check_recent_transactions()
+        # Check for payments that arrived while monitor was down
+        await monitor.check_missed_payments()
         
         # Start monitoring
         await monitor.start_monitoring()
