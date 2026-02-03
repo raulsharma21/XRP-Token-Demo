@@ -15,13 +15,12 @@
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { margin-bottom: 10px; color: #60a5fa; }
         .subtitle { color: #94a3b8; margin-bottom: 30px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
         .card {
             background: #1e293b;
             border: 1px solid #334155;
             border-radius: 8px;
             padding: 20px;
-        }
+wha        }
         .card h2 { color: #60a5fa; margin-bottom: 15px; font-size: 18px; }
         .stat { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px solid #334155; }
         .stat:last-child { border-bottom: none; }
@@ -55,14 +54,41 @@
         .success { color: #10b981; }
         .error { color: #ef4444; }
         .warning { color: #f59e0b; }
+        .info { color: #60a5fa; }
         .message { padding: 10px; border-radius: 4px; margin-top: 15px; font-size: 14px; }
         .message.success { background: #064e3b; border: 1px solid #10b981; }
         .message.error { background: #450a0a; border: 1px solid #ef4444; }
+        .message.info { background: #172554; border: 1px solid #60a5fa; }
         .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
         .tab { padding: 10px 20px; background: #1e293b; border: 1px solid #334155; border-radius: 4px; cursor: pointer; }
         .tab.active { background: #3b82f6; border-color: #3b82f6; }
         .hidden { display: none; }
         .price { font-size: 24px; font-weight: 700; color: #60a5fa; }
+        .step-box {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            border-left: 3px solid #60a5fa;
+        }
+        .step-box h3 { color: #60a5fa; margin-bottom: 8px; font-size: 16px; }
+        .step-box p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+        code {
+            background: #0f172a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #60a5fa;
+            font-size: 13px;
+        }
+        .trust-info {
+            background: #172554;
+            border: 1px solid #60a5fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        a { color: #60a5fa; text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -99,45 +125,75 @@
 
         <!-- Tabs -->
         <div class="tabs">
-            <div class="tab active" onclick="showTab('onboard')">1. Onboard</div>
-            <div class="tab" onclick="showTab('buy')">2. IPO Purchase</div>
+            <div class="tab active" onclick="showTab('onboard')">1. Get Started</div>
+            <div class="tab" onclick="showTab('buy')">2. Buy Tokens</div>
             <div class="tab" onclick="showTab('trade')">3. Trade</div>
             <div class="tab" onclick="showTab('dashboard')">4. Dashboard</div>
         </div>
 
         <!-- Onboard Tab -->
         <div id="onboardTab" class="card">
-            <h2>Step 1: Investor Onboarding</h2>
-            <div class="input-group">
-                <label>Email</label>
-                <input type="email" id="emailInput" placeholder="investor@example.com">
+            <h2>Get Started</h2>
+            
+            <div class="step-box">
+                <h3>Step 1: Create Trust Line on XRPL</h3>
+                <p style="margin-bottom: 10px;">Before registering, create a trust line to receive IND tokens.</p>
+                
+                <div class="trust-info">
+                    <strong style="color: #60a5fa;">Trust Line Details:</strong><br>
+                    <span style="color: #94a3b8;">Currency:</span> <code>IND</code><br>
+                    <span style="color: #94a3b8;">Issuer:</span> <code>rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok</code><br>
+                    <span style="color: #94a3b8;">Limit:</span> <code>1000000</code>
+                </div>
+                
+                <p>
+                    <strong style="color: #60a5fa;">How to create:</strong><br>
+                    • Get testnet XRP: <a href="https://faucet.altnet.rippletest.net/" target="_blank">XRPL Faucet</a><br>
+                    • Use Xaman wallet to set up trust line<br>
+                    • Return here to register
+                </p>
             </div>
-            <div class="input-group">
-                <label>XRPL Address</label>
-                <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+
+            <div class="step-box">
+                <h3>Step 2: Register Your Account</h3>
+                <div class="input-group">
+                    <label>Email</label>
+                    <input type="email" id="emailInput" placeholder="your@email.com">
+                </div>
+                <div class="input-group">
+                    <label>XRPL Address (with trust line created)</label>
+                    <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+                </div>
+                <button onclick="onboard()">Complete Registration</button>
             </div>
-            <button onclick="onboard()">Register</button>
+
             <div id="onboardMessage"></div>
         </div>
 
         <!-- Buy Tab -->
         <div id="buyTab" class="card hidden">
-            <h2>Step 2: IPO Token Purchase</h2>
-            <div class="input-group">
-                <label>Investor ID (from onboarding)</label>
+            <h2>Buy IND Tokens</h2>
+            
+            <div class="message info">
+                <strong>How it works:</strong><br>
+                Enter your investor ID to get deposit instructions. Send XRP (simulating USDC on testnet) with the destination tag, and tokens will be issued automatically.
+            </div>
+
+            <div class="input-group" style="margin-top: 20px;">
+                <label>Investor ID (from registration)</label>
                 <input type="text" id="investorIdBuy" placeholder="uuid">
             </div>
             <div class="input-group">
-                <label>USDC Amount</label>
-                <input type="number" id="usdcAmount" placeholder="100" value="10">
+                <label>Amount (XRP)</label>
+                <input type="number" id="usdcAmount" placeholder="10" value="10">
             </div>
-            <button onclick="initiatePurchase()">Initiate Purchase</button>
+            <button onclick="initiatePurchase()">Get Deposit Instructions</button>
             <div id="buyMessage"></div>
         </div>
 
         <!-- Trade Tab -->
         <div id="tradeTab" class="card hidden">
-            <h2>Step 3: Trade on AMM</h2>
+            <h2>Trade on AMM</h2>
             <div class="input-group">
                 <label>Direction</label>
                 <select id="tradeDirection" onchange="updateTradeLabels()">
@@ -165,7 +221,7 @@
 
         <!-- Dashboard Tab -->
         <div id="dashboardTab" class="card hidden">
-            <h2>Step 4: Your Portfolio</h2>
+            <h2>Your Portfolio</h2>
             <div class="input-group">
                 <label>Your XRPL Address</label>
                 <input type="text" id="dashboardAddress" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
@@ -176,8 +232,8 @@
     </div>
 
     <script>
-        // const API_BASE = 'http://localhost:8000/api';
-        const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
+        const API_BASE = 'http://localhost:8000/api';
+        // const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
         let currentQuote = null;
 
         // Tab switching
@@ -202,6 +258,18 @@
                     document.getElementById('tokenReserve').textContent = `${data.token_reserve.toFixed(2)} IND`;
                     document.getElementById('xrpReserve').textContent = `${data.xrp_reserve.toFixed(2)} XRP`;
                     document.getElementById('tradingFee').textContent = `${data.trading_fee}%`;
+    
+                    // Add pool address only if it doesn't exist yet
+                    if (!document.getElementById('poolAddressRow')) {
+                        const poolAddressRow = document.createElement('div');
+                        poolAddressRow.id = 'poolAddressRow';
+                        poolAddressRow.className = 'stat';
+                        poolAddressRow.innerHTML = `
+                            <span class="stat-label">Pool Address</span>
+                            <span class="stat-value" style="font-size: 12px;">${data.pool_address}</span>
+                        `;
+                        document.getElementById('poolStats').appendChild(poolAddressRow);
+                    }
                 } else {
                     document.getElementById('poolStatus').textContent = 'IPO Phase';
                     document.getElementById('poolStatus').className = 'stat-value warning';
@@ -218,6 +286,11 @@
             const address = document.getElementById('xrplAddressInput').value;
             const msgEl = document.getElementById('onboardMessage');
             
+            if (!email || !address) {
+                msgEl.innerHTML = '<div class="message error">✗ Please fill in all fields</div>';
+                return;
+            }
+            
             try {
                 const res = await fetch(`${API_BASE}/onboard`, {
                     method: 'POST',
@@ -227,7 +300,15 @@
                 const data = await res.json();
                 
                 if (res.ok) {
-                    msgEl.innerHTML = `<div class="message success">✓ Registered! Investor ID: <strong>${data.investor_id}</strong><br>Copy this ID for next steps.</div>`;
+                    msgEl.innerHTML = `<div class="message success">
+                        ✓ Registration Complete!<br><br>
+                        <strong>Investor ID:</strong> <code>${data.investor_id}</code><br><br>
+                        <strong>Next Steps:</strong><br>
+                        1. Copy your Investor ID above<br>
+                        2. Our team will review and approve your application<br>
+                        3. Once approved, use the "Buy Tokens" tab with your Investor ID<br><br>
+                        <small>Approval usually takes 24-48 hours.</small>
+                    </div>`;
                 } else {
                     msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
                 }
@@ -242,6 +323,11 @@
             const amount = document.getElementById('usdcAmount').value;
             const msgEl = document.getElementById('buyMessage');
             
+            if (!investorId) {
+                msgEl.innerHTML = '<div class="message error">✗ Please enter your Investor ID</div>';
+                return;
+            }
+            
             try {
                 const res = await fetch(`${API_BASE}/buy/initiate`, {
                     method: 'POST',
@@ -253,11 +339,12 @@
                 if (res.ok) {
                     const inst = data.deposit_instructions;
                     msgEl.innerHTML = `<div class="message success">
-                        ✓ Purchase initiated!<br>
-                        <strong>Send ${inst.amount} ${inst.currency} to:</strong><br>
-                        Address: ${inst.destination}<br>
-                        Destination Tag: <strong>${inst.destination_tag}</strong><br>
-                        <small>Tokens will be issued automatically within 5 minutes.</small>
+                        ✓ Purchase initiated!<br><br>
+                        <strong>Send ${inst.amount} XRP to:</strong><br>
+                        Address: <code>${inst.destination}</code><br>
+                        Destination Tag: <code style="font-size: 16px; color: #10b981;">${inst.destination_tag}</code><br><br>
+                        <small>⚠️ MUST include destination tag!<br>
+                        Tokens arrive automatically within 30 seconds.</small>
                     </div>`;
                 } else {
                     msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
@@ -300,10 +387,9 @@
         }
 
         function executeTrade() {
-            document.getElementById('tradeMessage').innerHTML = `<div class="message warning">
-                ℹ Trading must be done directly on XRPL using your wallet.<br>
-                Use <a href="https://testnet.xrpl.org" target="_blank" style="color: #60a5fa;">XRPL Testnet Explorer</a> or a wallet like Xaman.<br>
-                Pool Address will be shown after pool creation.
+            document.getElementById('tradeMessage').innerHTML = `<div class="message info">
+                ℹ️ Trading must be done directly on XRPL using your wallet.<br>
+                Use <a href="https://testnet.xrpl.org" target="_blank">XRPL Testnet Explorer</a> or Xaman.
             </div>`;
         }
 
@@ -311,6 +397,11 @@
         async function loadDashboard() {
             const address = document.getElementById('dashboardAddress').value;
             const display = document.getElementById('dashboardDisplay');
+            
+            if (!address) {
+                display.innerHTML = '<div class="message error">✗ Please enter your XRPL address</div>';
+                return;
+            }
             
             try {
                 const res = await fetch(`${API_BASE}/dashboard/${address}`);
@@ -331,9 +422,9 @@
             }
         }
 
-        // Load pool stats on page load
+        // Initialize
         loadPoolStats();
-        setInterval(loadPoolStats, 30000); // Refresh every 30s
+        setInterval(loadPoolStats, 30000);
     </script>
 </body>
 </html>

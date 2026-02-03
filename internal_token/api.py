@@ -657,7 +657,7 @@ async def get_trade_quote(request: TradeQuoteRequest):
     """
     try:
         # Get pool info
-        pool_info = await get_pool_info()
+        pool_info = await get_pool_info_route()
         
         if not pool_info.get("pool_exists"):
             raise HTTPException(status_code=400, detail="Pool not available")
@@ -723,7 +723,7 @@ async def get_trade_history(limit: int = 20):
     Note: This queries XRPL transaction history
     """
     try:
-        pool_info = await get_pool_info()
+        pool_info = await get_pool_info_route()
         
         if not pool_info.get("pool_exists"):
             return TradeHistoryResponse(trades=[], total_volume_24h=0)

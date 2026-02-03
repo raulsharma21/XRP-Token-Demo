@@ -11,10 +11,13 @@ from xrpl.models.requests import AMMInfo
 from xrpl.transaction import submit_and_wait
 from xrpl.utils import xrp_to_drops
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from decimal import Decimal
 
-load_dotenv()
+# Load .env from parent directory (internal_token/)
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(env_path)
 
 # Configuration
 TESTNET_URL = "https://s.altnet.rippletest.net:51234/"

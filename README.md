@@ -37,15 +37,20 @@ python test_e2e.py         # Terminal 3 (test)
 ## Project Structure
 
 ```
-internal_token/          # Main application
-├── api.py              # FastAPI server
-├── database.py         # Database layer
-├── xrpl_utils.py       # XRPL utilities
-├── monitor.py          # Transaction monitor
-├── setup_wallets.py    # Wallet setup
-└── test_e2e.py         # E2E tests
+internal_token/              # Main application
+├── api.py                  # FastAPI server
+├── database.py             # Database layer
+├── xrpl_utils.py           # XRPL utilities
+├── monitor.py              # Transaction monitor
+├── setup_wallets.py        # Wallet setup
+├── test_e2e.py             # E2E tests
+└── xrpl_operations/        # XRPL operation tools
+    ├── send_xrp.py         # Send XRP between wallets
+    ├── create_trust_line.py  # Create trust lines
+    ├── create_amm_pool.py  # Create AMM pool
+    └── amm_swap.py         # Swap tokens via AMM
 
-examples/               # Demo scripts & tutorials
+examples/                   # Demo scripts & tutorials
 ```
 
 ## Key Endpoints
