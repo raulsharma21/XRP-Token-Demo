@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Fund Trading - Testnet</title>
+    <!-- Xaman SDK -->
+    <script src="https://xumm.app/assets/cdn/xumm.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -20,7 +22,8 @@
             border: 1px solid #334155;
             border-radius: 8px;
             padding: 20px;
-wha        }
+            margin-bottom: 20px;
+        }
         .card h2 { color: #60a5fa; margin-bottom: 15px; font-size: 18px; }
         .stat { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px solid #334155; }
         .stat:last-child { border-bottom: none; }
@@ -51,6 +54,15 @@ wha        }
         }
         button:hover { background: #2563eb; }
         button:disabled { background: #475569; cursor: not-allowed; }
+        button.secondary {
+            background: #1e293b;
+            border: 1px solid #60a5fa;
+            color: #60a5fa;
+            width: auto;
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        button.secondary:hover { background: #334155; }
         .success { color: #10b981; }
         .error { color: #ef4444; }
         .warning { color: #f59e0b; }
@@ -86,6 +98,13 @@ wha        }
             padding: 15px;
             border-radius: 4px;
             margin: 15px 0;
+        }
+        .wallet-box {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
         }
         a { color: #60a5fa; text-decoration: none; }
         a:hover { text-decoration: underline; }
@@ -194,6 +213,14 @@ wha        }
         <!-- Trade Tab -->
         <div id="tradeTab" class="card hidden">
             <h2>Trade on AMM</h2>
+            
+            <!-- Wallet Connection -->
+            <div class="wallet-box">
+                <div id="walletStatus">
+                    <button onclick="connectWallet()">Connect Xaman Wallet</button>
+                </div>
+            </div>
+            
             <div class="input-group">
                 <label>Direction</label>
                 <select id="tradeDirection" onchange="updateTradeLabels()">
@@ -215,7 +242,7 @@ wha        }
                     <span class="stat-value" id="quotePriceImpact">-</span>
                 </div>
             </div>
-            <button onclick="executeTrade()">Execute Trade on XRPL</button>
+            <button onclick="executeTrade()">Execute Trade</button>
             <div id="tradeMessage"></div>
         </div>
 
@@ -234,7 +261,101 @@ wha        }
     <script>
         const API_BASE = 'http://localhost:8000/api';
         // const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
+        
+        // REPLACE WITH YOUR XAMAN API KEY FROM https://apps.xumm.dev/
+        const XAMAN_API_KEY = '4f521c1c-055c-44ba-a1ef-3f4b09622c59';
+        const TOKEN_CODE = 'IND';
+        const TOKEN_ISSUER = 'rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok';
+        
         let currentQuote = null;
+        let xumm = null;
+        let userWallet = null;
+
+        // Initialize Xaman
+        function initXaman() {
+            try {
+                if (typeof Xumm === 'undefined') {
+                    console.error('Xumm SDK not loaded. Check script src.');
+                    return;
+                }
+                
+                xumm = new Xumm(XAMAN_API_KEY);
+                
+                xumm.on("ready", () => {
+                    console.log('✓ Xaman SDK ready');
+                    console.log('Current URL:', window.location.origin);
+                    console.log('Add this URL to Xaman Developer Console: https://apps.xumm.dev/');
+                });
+                
+                xumm.on("success", async () => {
+                    const account = await xumm.user.account;
+                    const networkType = await xumm.user.networkType;
+                    
+                    userWallet = {
+                        address: account,
+                        name: 'Xaman User',
+                        network: networkType
+                    };
+                    
+                    // Check if user is on testnet
+                    const networkWarning = networkType !== 'TESTNET' 
+                        ? `<div class="message error" style="margin-top: 10px;">⚠️ Warning: You're connected to ${networkType}. Please switch to TESTNET in Xaman settings!</div>`
+                        : `<div style="margin-top: 5px; color: #10b981; font-size: 12px;">Network: ${networkType} ✓</div>`;
+                    
+                    document.getElementById('walletStatus').innerHTML = `
+                        <div style="color: #10b981;">
+                            ✓ Connected: <strong>${account.substring(0, 12)}...</strong>
+                            <button class="secondary" onclick="disconnectWallet()" style="margin-left: 10px;">Disconnect</button>
+                        </div>
+                        ${networkWarning}
+                    `;
+                });
+                
+                xumm.on("logout", () => {
+                    userWallet = null;
+                    document.getElementById('walletStatus').innerHTML = 
+                        '<button onclick="connectWallet()">Connect Xaman Wallet</button>';
+                });
+                
+            } catch (err) {
+                console.error('Xaman init failed:', err);
+            }
+        }
+
+        // Connect wallet
+        async function connectWallet() {
+            const statusEl = document.getElementById('walletStatus');
+            
+            if (!xumm) {
+                statusEl.innerHTML = `
+                    <div class="message error">
+                        ✗ Xaman SDK not initialized<br>
+                        <small>Refresh the page and try again</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            try {
+                statusEl.innerHTML = '<div class="info">Opening Xaman app...</div>';
+                await xumm.authorize();
+            } catch (err) {
+                console.error('Connection error:', err);
+                statusEl.innerHTML = `
+                    <div class="message error">
+                        ✗ Connection failed: ${err.message}<br>
+                        <button onclick="connectWallet()" style="margin-top: 10px;">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Disconnect wallet
+        function disconnectWallet() {
+            if (xumm) {
+                xumm.logout();
+            }
+        }
 
         // Tab switching
         function showTab(tab) {
@@ -361,8 +482,8 @@ wha        }
             
             if (!amount || amount <= 0) return;
             
-            const fromCurrency = direction === 'buy' ? 'XRP' : 'IND';
-            const toCurrency = direction === 'buy' ? 'IND' : 'XRP';
+            const fromCurrency = direction === 'buy' ? 'XRP' : TOKEN_CODE;
+            const toCurrency = direction === 'buy' ? TOKEN_CODE : 'XRP';
             
             try {
                 const res = await fetch(`${API_BASE}/trade/quote`, {
@@ -386,11 +507,132 @@ wha        }
             getQuote();
         }
 
-        function executeTrade() {
-            document.getElementById('tradeMessage').innerHTML = `<div class="message info">
-                ℹ️ Trading must be done directly on XRPL using your wallet.<br>
-                Use <a href="https://testnet.xrpl.org" target="_blank">XRPL Testnet Explorer</a> or Xaman.
-            </div>`;
+        // Execute trade via Xaman
+        async function executeTrade() {
+            const msgEl = document.getElementById('tradeMessage');
+            
+            // Check wallet connected
+            if (!userWallet) {
+                msgEl.innerHTML = '<div class="message error">✗ Please connect your Xaman wallet first</div>';
+                return;
+            }
+            
+            // Check network
+            if (userWallet.network !== 'TESTNET') {
+                msgEl.innerHTML = `<div class="message error">✗ Please switch to TESTNET in Xaman app settings. Currently on: ${userWallet.network}</div>`;
+                return;
+            }
+            
+            // Check quote exists
+            if (!currentQuote) {
+                msgEl.innerHTML = '<div class="message error">✗ Please get a quote first (enter amount)</div>';
+                return;
+            }
+            
+            msgEl.innerHTML = '<div class="message info">Creating transaction...</div>';
+            
+            try {
+                const direction = document.getElementById('tradeDirection').value;
+                const amount = parseFloat(document.getElementById('tradeAmount').value);
+                
+                // Get pool info
+                const poolRes = await fetch(`${API_BASE}/pool/info`);
+                const poolData = await poolRes.json();
+                
+                if (!poolData.pool_exists) {
+                    msgEl.innerHTML = '<div class="message error">✗ Pool not available</div>';
+                    return;
+                }
+                
+                // Create transaction payload
+                let txPayload;
+                const slippage = 0.02; // 2% slippage
+                
+                if (direction === 'buy') {
+                    // Buy IND with XRP
+                    const minReceive = (currentQuote.output_amount * (1 - slippage)).toFixed(6);
+                    const maxSend = (amount * 1000000).toString(); // XRP to drops
+                    
+                    txPayload = {
+                        TransactionType: 'Payment',
+                        Account: userWallet.address,
+                        Destination: userWallet.address,
+                        Amount: {
+                            currency: TOKEN_CODE,
+                            issuer: TOKEN_ISSUER,
+                            value: minReceive
+                        },
+                        SendMax: maxSend,
+                        Flags: 131072 // tfPartialPayment
+                    };
+                } else {
+                    // Sell IND for XRP
+                    const minReceive = (currentQuote.output_amount * (1 - slippage) * 1000000).toFixed(0);
+                    const maxSend = amount.toFixed(6);
+                    
+                    txPayload = {
+                        TransactionType: 'Payment',
+                        Account: userWallet.address,
+                        Destination: userWallet.address,
+                        Amount: minReceive,
+                        SendMax: {
+                            currency: TOKEN_CODE,
+                            issuer: TOKEN_ISSUER,
+                            value: maxSend
+                        },
+                        Flags: 131072
+                    };
+                }
+                
+                // Create Xaman payload
+                const payload = await xumm.payload.create({
+                    txjson: txPayload
+                });
+                
+                if (payload.created) {
+                    // Show QR code
+                    msgEl.innerHTML = `
+                        <div class="message success">
+                            <strong>Sign transaction in Xaman:</strong><br><br>
+                            <img src="${payload.refs.qr_png}" style="max-width: 250px; border-radius: 8px;"><br><br>
+                            <a href="${payload.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
+                                Or click here to open Xaman →
+                            </a><br><br>
+                            <small style="color: #94a3b8;">Waiting for signature...</small>
+                        </div>
+                    `;
+                    
+                    // Wait for signature
+                    const result = await xumm.payload.subscribe(payload.uuid);
+                    
+                    if (result.signed) {
+                        msgEl.innerHTML = `
+                            <div class="message success">
+                                ✓ Trade completed!<br><br>
+                                <strong>TX Hash:</strong><br>
+                                <code style="display: block; margin: 10px 0; font-size: 11px; word-break: break-all;">${result.txid}</code>
+                                <a href="https://testnet.xrpl.org/transactions/${result.txid}" target="_blank" style="color: #60a5fa;">
+                                    View on Explorer →
+                                </a>
+                            </div>
+                        `;
+                    } else {
+                        msgEl.innerHTML = `<div class="message error">✗ Transaction rejected or expired</div>`;
+                    }
+                }
+                
+            } catch (err) {
+                console.error('Trade error:', err);
+                msgEl.innerHTML = `
+                    <div class="message error">
+                        ✗ Error: ${err.message || 'Failed to create transaction'}<br><br>
+                        <small>Common issues:</small><br>
+                        <small>• No trust line to IND token</small><br>
+                        <small>• Insufficient balance</small><br>
+                        <small>• Pool liquidity too low</small>
+                    </div>
+                `;
+            }
         }
 
         // Dashboard
@@ -422,7 +664,8 @@ wha        }
             }
         }
 
-        // Initialize
+        // Initialize on page load
+        initXaman();
         loadPoolStats();
         setInterval(loadPoolStats, 30000);
     </script>
