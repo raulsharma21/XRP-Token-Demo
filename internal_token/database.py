@@ -254,6 +254,19 @@ class PurchaseDB:
         return dict(row) if row else None
     
     @staticmethod
+    async def get_by_deposit_tx(deposit_tx_hash: str) -> Optional[Dict[str, Any]]:
+        """Get purchase by deposit transaction hash"""
+        row = await db.fetchrow(
+            """
+            SELECT * FROM purchases 
+            WHERE deposit_tx_hash = $1
+            LIMIT 1
+            """,
+            deposit_tx_hash
+        )
+        return dict(row) if row else None
+    
+    @staticmethod
     async def update_status(
         purchase_id: str,
         status: str,

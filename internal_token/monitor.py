@@ -384,6 +384,13 @@ class TransactionMonitor:
                     tx_hash = matched_tx['hash']
                     print(f"    ✓ Found transaction: {tx_hash}")
                     
+                    # Check if this transaction was already processed in another purchase
+                    existing_purchase = await PurchaseDB.get_by_deposit_tx(tx_hash)
+                    if existing_purchase:
+                        print(f"    ⊘ Transaction already processed in purchase {existing_purchase['id']}")
+                        print(f"       Skipping to avoid duplicate issuance")
+                        continue
+                    
                     # Create message structure for process_usdc_deposit
                     message = {
                         'type': 'transaction',
