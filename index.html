@@ -786,19 +786,13 @@
                         TransactionType: 'Payment',
                         Account: userWallet.address,
                         Destination: userWallet.address,
-                        Amount: minReceiveDrops,  // XRP in drops
+                        Amount: minReceiveDrops,
                         SendMax: {
                             currency: TOKEN_CODE,
                             issuer: TOKEN_ISSUER,
                             value: maxSend
                         },
-                        // KEY FIX: Explicit path to convert through order book/AMM to XRP
-                        Paths: [[
-                            {
-                                currency: 'XRP'  // Path step: convert to XRP
-                            }
-                        ]],
-                        Flags: 131072  // tfPartialPayment
+                        Flags: 131072
                     };
                 }
                 
