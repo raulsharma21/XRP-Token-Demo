@@ -173,11 +173,12 @@ class SystemStatsResponse(BaseModel):
 
 # ==================== HELPER FUNCTIONS ====================
 
-def generate_unique_destination_tag(investor_id: str) -> int:
-    """Generate unique destination tag from investor ID"""
-    # Simple hash-based tag generation (use better method in production)
+def generate_unique_destination_tag() -> int:
+    """Generate unique random destination tag for each purchase"""
+    import uuid
     import hashlib
-    hash_obj = hashlib.md5(investor_id.encode())
+    unique_id = str(uuid.uuid4())
+    hash_obj = hashlib.md5(unique_id.encode())
     return int(hash_obj.hexdigest()[:8], 16) % (2**32)
 
 # ==================== PHASE 1: ONBOARDING ROUTES ====================
@@ -398,7 +399,7 @@ async def initiate_purchase(request: PurchaseInitiateRequest):
             )
         
         # Generate destination tag
-        destination_tag = generate_unique_destination_tag(request.investor_id)
+        destination_tag = generate_unique_destination_tag()
         
         # Create purchase record
         purchase = await PurchaseDB.create(
