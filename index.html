@@ -155,8 +155,18 @@
             <h2>Get Started</h2>
             
             <div class="step-box">
-                <h3>Step 1: Create Trust Line on XRPL</h3>
-                <p style="margin-bottom: 10px;">Before registering, create a trust line to receive IND tokens.</p>
+                <h3>Step 1: Connect Xaman Wallet</h3>
+                <p style="margin-bottom: 10px;">Connect your Xaman wallet to get started. Make sure you're on TESTNET!</p>
+                <div class="wallet-box" style="margin-top: 10px;">
+                    <div id="onboardWalletStatus">
+                        <button onclick="connectWalletOnboarding()">Connect Xaman Wallet</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="trustLineStep" class="step-box hidden">
+                <h3>Step 2: Create Trust Line</h3>
+                <p style="margin-bottom: 10px;">Create a trust line to receive IND tokens.</p>
                 
                 <div class="trust-info">
                     <strong style="color: #60a5fa;">Trust Line Details:</strong><br>
@@ -165,23 +175,19 @@
                     <span style="color: #94a3b8;">Limit:</span> <code>1000000</code>
                 </div>
                 
-                <p>
-                    <strong style="color: #60a5fa;">How to create:</strong><br>
-                    • Get testnet XRP: <a href="https://faucet.altnet.rippletest.net/" target="_blank">XRPL Faucet</a><br>
-                    • Use Xaman wallet to set up trust line<br>
-                    • Return here to register
-                </p>
+                <button onclick="createTrustLine()" style="margin-top: 10px;">Create Trust Line in Xaman</button>
+                <div id="trustLineMessage"></div>
             </div>
 
-            <div class="step-box">
-                <h3>Step 2: Register Your Account</h3>
+            <div id="registerStep" class="step-box hidden">
+                <h3>Step 3: Register Your Email</h3>
                 <div class="input-group">
                     <label>Email</label>
                     <input type="email" id="emailInput" placeholder="your@email.com">
                 </div>
                 <div class="input-group">
-                    <label>XRPL Address (with trust line created)</label>
-                    <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+                    <label>XRPL Address (auto-filled)</label>
+                    <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" readonly>
                 </div>
                 <button onclick="onboard()">Complete Registration</button>
             </div>
@@ -322,7 +328,148 @@
             }
         }
 
-        // Connect wallet
+        // Connect wallet (onboarding version)
+        async function connectWalletOnboarding() {
+            const statusEl = document.getElementById('onboardWalletStatus');
+            
+            if (!xumm) {
+                statusEl.innerHTML = '<div class="message error">✗ Xaman SDK not initialized. Refresh the page.</div>';
+                return;
+            }
+            
+            try {
+                statusEl.innerHTML = '<div class="info">Opening Xaman app...</div>';
+                await xumm.authorize();
+                
+                // Wait for the success event to populate userWallet
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                if (userWallet) {
+                    const networkWarning = userWallet.network !== 'TESTNET' 
+                        ? `<div class="message error" style="margin-top: 10px;">⚠️ Warning: You're on ${userWallet.network}. Please switch to TESTNET in Xaman settings!</div>`
+                        : '';
+                    
+                    statusEl.innerHTML = `
+                        <div style="color: #10b981;">
+                            ✓ Connected: <strong>${userWallet.address.substring(0, 12)}...</strong>
+                            <div style="margin-top: 5px; color: #10b981; font-size: 12px;">Network: ${userWallet.network}</div>
+                        </div>
+                        ${networkWarning}
+                    `;
+                    
+                    // Auto-fill address in registration form
+                    document.getElementById('xrplAddressInput').value = userWallet.address;
+                    
+                    // Show trust line step
+                    document.getElementById('trustLineStep').classList.remove('hidden');
+                }
+                
+            } catch (err) {
+                console.error('Connection error:', err);
+                statusEl.innerHTML = `
+                    <div class="message error">
+                        ✗ Connection failed: ${err.message}
+                        <button onclick="connectWalletOnboarding()" style="margin-top: 10px;">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        // Create trust line via Xaman
+        async function createTrustLine() {
+            if (!userWallet) {
+                alert('Please connect wallet first');
+                return;
+            }
+            
+            if (userWallet.network !== 'TESTNET') {
+                document.getElementById('trustLineMessage').innerHTML = 
+                    '<div class="message error">✗ Please switch to TESTNET in Xaman settings first!</div>';
+                return;
+            }
+            
+            const msgEl = document.getElementById('trustLineMessage');
+            msgEl.innerHTML = '<div class="message info">Creating trust line payload...</div>';
+            
+            try {
+                const trustLinePayload = {
+                    TransactionType: 'TrustSet',
+                    Account: userWallet.address,
+                    LimitAmount: {
+                        currency: TOKEN_CODE,
+                        issuer: TOKEN_ISSUER,
+                        value: '1000000'
+                    }
+                };
+                
+                // Use createAndSubscribe with callback
+                const { created, resolved } = await xumm.payload.createAndSubscribe(
+                    { txjson: trustLinePayload },
+                    (eventMessage) => {
+                        console.log('Trust line event:', eventMessage);
+                        if ('opened' in eventMessage.data) {
+                            // User opened the payload
+                            console.log('Payload opened');
+                        }
+                        // Only return (resolve) when signed is true OR false (actually resolved)
+                        if (eventMessage.data.signed === true || eventMessage.data.signed === false) {
+                            return eventMessage;
+                        }
+                    }
+                );
+                
+                msgEl.innerHTML = `
+                    <div class="message success">
+                        <strong>Sign in Xaman to create trust line:</strong><br><br>
+                        <img src="${created.refs.qr_png}" style="max-width: 200px; border-radius: 8px;"><br><br>
+                        <a href="${created.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
+                            Open in Xaman →
+                        </a><br><br>
+                        <small style="color: #94a3b8;">Waiting for signature...</small>
+                    </div>
+                `;
+                
+                const result = await resolved;
+                console.log('Trust line resolved result:', result);
+                
+                // Check if user signed
+                if (result.data && result.data.signed === true) {
+                    msgEl.innerHTML = '<div class="message info">Verifying transaction...</div>';
+                    
+                    try {
+                        // Fetch full payload to check ledger result
+                        const payloadResult = await xumm.payload.get(result.data.payload_uuidv4);
+                        const ledgerResult = payloadResult.response?.dispatched_result;
+                        
+                        if (ledgerResult === 'tesSUCCESS') {
+                            msgEl.innerHTML = `<div class="message success">✓ Trust line created successfully!</div>`;
+                            
+                            // Show registration step
+                            document.getElementById('registerStep').classList.remove('hidden');
+                        } else {
+                            msgEl.innerHTML = `
+                                <div class="message error">
+                                    ✗ Trust line creation failed<br><br>
+                                    <strong>Result:</strong> ${ledgerResult || 'Unknown'}<br>
+                                    <small>Please try again or contact support.</small>
+                                </div>
+                            `;
+                        }
+                    } catch (fetchErr) {
+                        console.error('Error verifying trust line:', fetchErr);
+                        msgEl.innerHTML = `<div class="message error">✗ Could not verify transaction. Please check Xaman app.</div>`;
+                    }
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ Trust line creation rejected or expired</div>`;
+                }
+                
+            } catch (err) {
+                console.error('Trust line error:', err);
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Connect wallet (trade tab version)
         async function connectWallet() {
             const statusEl = document.getElementById('walletStatus');
             
@@ -379,7 +526,7 @@
                     document.getElementById('tokenReserve').textContent = `${data.token_reserve.toFixed(2)} IND`;
                     document.getElementById('xrpReserve').textContent = `${data.xrp_reserve.toFixed(2)} XRP`;
                     document.getElementById('tradingFee').textContent = `${data.trading_fee}%`;
-    
+
                     // Add pool address only if it doesn't exist yet
                     if (!document.getElementById('poolAddressRow')) {
                         const poolAddressRow = document.createElement('div');
@@ -507,6 +654,70 @@
             getQuote();
         }
 
+        // Find path using ripple_path_find via WebSocket
+        async function findPaymentPath(fromCurrency, toCurrency, destinationAmount) {
+            return new Promise((resolve) => {
+                try {
+                    const ws = new WebSocket('wss://s.altnet.rippletest.net:51233');
+                    
+                    const timeout = setTimeout(() => {
+                        console.log('Path find timeout');
+                        ws.close();
+                        resolve([]);
+                    }, 10000);
+                    
+                    ws.onopen = () => {
+                        const pathRequest = {
+                            id: 'path_find_1',
+                            command: 'ripple_path_find',
+                            source_account: userWallet.address,
+                            destination_account: userWallet.address,
+                            destination_amount: toCurrency === 'XRP' 
+                                ? Math.floor(destinationAmount * 1000000).toString()
+                                : {
+                                    currency: toCurrency,
+                                    issuer: TOKEN_ISSUER,
+                                    value: destinationAmount.toString()
+                                },
+                            source_currencies: [{
+                                currency: fromCurrency,
+                                issuer: fromCurrency === 'XRP' ? undefined : TOKEN_ISSUER
+                            }]
+                        };
+                        
+                        console.log('Path request:', pathRequest);
+                        ws.send(JSON.stringify(pathRequest));
+                    };
+                    
+                    ws.onmessage = (event) => {
+                        clearTimeout(timeout);
+                        const data = JSON.parse(event.data);
+                        console.log('Path find result:', data);
+                        ws.close();
+                        
+                        if (data.result && data.result.alternatives && data.result.alternatives.length > 0) {
+                            console.log('Found paths:', data.result.alternatives[0].paths_computed);
+                            resolve(data.result.alternatives[0].paths_computed || []);
+                        } else {
+                            console.log('No paths found in response');
+                            resolve(null);  // null = actually no path
+                        }
+                    };
+                    
+                    ws.onerror = (err) => {
+                        clearTimeout(timeout);
+                        console.error('WebSocket error:', err);
+                        ws.close();
+                        resolve(null);
+                    };
+                    
+                } catch (err) {
+                    console.error('Path finding error:', err);
+                    resolve(null);
+                }
+            });
+        }
+
         // Execute trade via Xaman
         async function executeTrade() {
             const msgEl = document.getElementById('tradeMessage');
@@ -567,58 +778,131 @@
                     };
                 } else {
                     // Sell IND for XRP
-                    const minReceive = (currentQuote.output_amount * (1 - slippage) * 1000000).toFixed(0);
-                    const maxSend = amount.toFixed(6);
-                    
+                    const minReceive = (currentQuote.output_amount * (1 - slippage)).toFixed(6);
+                    const minReceiveDrops = Math.floor(parseFloat(minReceive) * 1000000).toString();
+                    const maxSend = amount.toFixed(15);
+
                     txPayload = {
                         TransactionType: 'Payment',
                         Account: userWallet.address,
                         Destination: userWallet.address,
-                        Amount: minReceive,
+                        Amount: minReceiveDrops,  // XRP in drops
                         SendMax: {
                             currency: TOKEN_CODE,
                             issuer: TOKEN_ISSUER,
                             value: maxSend
                         },
-                        Flags: 131072
+                        // KEY FIX: Explicit path to convert through order book/AMM to XRP
+                        Paths: [[
+                            {
+                                currency: 'XRP'  // Path step: convert to XRP
+                            }
+                        ]],
+                        Flags: 131072  // tfPartialPayment
                     };
                 }
                 
-                // Create Xaman payload
-                const payload = await xumm.payload.create({
-                    txjson: txPayload
-                });
+                // Create Xaman payload with subscription
+                const { created, resolved } = await xumm.payload.createAndSubscribe(
+                    { txjson: txPayload },
+                    (eventMessage) => {
+                        console.log('Trade event:', eventMessage);
+                        if ('opened' in eventMessage.data) {
+                            console.log('Payload opened');
+                        }
+                        // Only return (resolve) when signed is true OR false (actually resolved)
+                        if (eventMessage.data.signed === true || eventMessage.data.signed === false) {
+                            return eventMessage;
+                        }
+                    }
+                );
                 
-                if (payload.created) {
-                    // Show QR code
-                    msgEl.innerHTML = `
-                        <div class="message success">
-                            <strong>Sign transaction in Xaman:</strong><br><br>
-                            <img src="${payload.refs.qr_png}" style="max-width: 250px; border-radius: 8px;"><br><br>
-                            <a href="${payload.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
-                                Or click here to open Xaman →
-                            </a><br><br>
-                            <small style="color: #94a3b8;">Waiting for signature...</small>
-                        </div>
-                    `;
+                // Show QR code
+                msgEl.innerHTML = `
+                    <div class="message success">
+                        <strong>Sign transaction in Xaman:</strong><br><br>
+                        <img src="${created.refs.qr_png}" style="max-width: 250px; border-radius: 8px;"><br><br>
+                        <a href="${created.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
+                            Or click here to open Xaman →
+                        </a><br><br>
+                        <small style="color: #94a3b8;">Waiting for signature...</small>
+                    </div>
+                `;
+                
+                const result = await resolved;
+                console.log('Trade resolved result:', result);
+                
+                // Check if user signed the transaction
+                if (result.data && result.data.signed === true) {
+                    const txid = result.data.txid;
                     
-                    // Wait for signature
-                    const result = await xumm.payload.subscribe(payload.uuid);
+                    // Fetch the full payload to check actual ledger result
+                    msgEl.innerHTML = '<div class="message info">Verifying transaction on ledger...</div>';
                     
-                    if (result.signed) {
+                    try {
+                        let payloadResult = await xumm.payload.get(result.data.payload_uuidv4);
+                        console.log('Full payload result:', payloadResult);
+                        
+                        let ledgerResult = payloadResult.response?.dispatched_result;
+                        
+                        // If queued, wait and retry
+                        if (ledgerResult === 'terQUEUED') {
+                            msgEl.innerHTML = '<div class="message info">Transaction queued, waiting for ledger confirmation...</div>';
+                            
+                            // Poll for final result (max 10 seconds)
+                            for (let i = 0; i < 10; i++) {
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                payloadResult = await xumm.payload.get(result.data.payload_uuidv4);
+                                ledgerResult = payloadResult.response?.dispatched_result;
+                                console.log(`Poll ${i+1}: ${ledgerResult}`);
+                                
+                                if (ledgerResult && ledgerResult !== 'terQUEUED') {
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (ledgerResult === 'tesSUCCESS') {
+                            msgEl.innerHTML = `
+                                <div class="message success">
+                                    ✓ Trade completed successfully!<br><br>
+                                    <strong>TX Hash:</strong><br>
+                                    <code style="display: block; margin: 10px 0; font-size: 11px; word-break: break-all;">${txid}</code>
+                                    <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                        View on Explorer →
+                                    </a>
+                                </div>
+                            `;
+                        } else {
+                            msgEl.innerHTML = `
+                                <div class="message error">
+                                    ✗ Transaction failed on ledger<br><br>
+                                    <strong>Result:</strong> ${ledgerResult || 'Unknown'}<br>
+                                    <strong>TX Hash:</strong> ${txid}<br><br>
+                                    <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                        View on Explorer →
+                                    </a><br><br>
+                                    <small>Common issues:</small><br>
+                                    <small>• <strong>tecPATH_DRY:</strong> No liquidity path found (AMM pool issue)</small><br>
+                                    <small>• <strong>tecUNFUNDED_PAYMENT:</strong> Insufficient balance</small><br>
+                                    <small>• <strong>tecNO_DST_INSUF_XRP:</strong> Destination needs more XRP reserve</small>
+                                </div>
+                            `;
+                        }
+                    } catch (fetchErr) {
+                        console.error('Error fetching payload result:', fetchErr);
                         msgEl.innerHTML = `
-                            <div class="message success">
-                                ✓ Trade completed!<br><br>
-                                <strong>TX Hash:</strong><br>
-                                <code style="display: block; margin: 10px 0; font-size: 11px; word-break: break-all;">${result.txid}</code>
-                                <a href="https://testnet.xrpl.org/transactions/${result.txid}" target="_blank" style="color: #60a5fa;">
-                                    View on Explorer →
+                            <div class="message error">
+                                ✗ Could not verify transaction result<br><br>
+                                <strong>TX Hash:</strong> ${txid}<br>
+                                <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                    View on Explorer to check status →
                                 </a>
                             </div>
                         `;
-                    } else {
-                        msgEl.innerHTML = `<div class="message error">✗ Transaction rejected or expired</div>`;
                     }
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ Transaction rejected or expired</div>`;
                 }
                 
             } catch (err) {
@@ -668,6 +952,7 @@
         initXaman();
         loadPoolStats();
         setInterval(loadPoolStats, 30000);
+
     </script>
 </body>
 </html>
