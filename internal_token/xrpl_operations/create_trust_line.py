@@ -98,8 +98,8 @@ print("\nTRUST LINE LIMIT")
 print("-" * 60)
 print("How many tokens do you want to be able to hold?")
 print("(This is your maximum balance, you can set it high)")
-limit_input = input("Limit (default: 1000000): ").strip()
-limit = limit_input if limit_input else "1000000"
+limit_input = input("Limit (default: 100): ").strip()
+limit = limit_input if limit_input else "100"
 
 # Summary
 print("\n" + "=" * 60)

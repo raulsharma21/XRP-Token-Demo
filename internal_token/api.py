@@ -183,6 +183,29 @@ def generate_unique_destination_tag() -> int:
 
 # ==================== PHASE 1: ONBOARDING ROUTES ====================
 
+@app.get("/api/investors/by-address/{xrpl_address}")
+async def get_investor_by_address(xrpl_address: str):
+    """
+    Get investor information by XRPL address
+    Used by frontend to look up investor account from connected wallet
+    """
+    try:
+        investor = await InvestorDB.get_by_xrpl_address(xrpl_address)
+        if not investor:
+            raise HTTPException(status_code=404, detail="Investor not found")
+        
+        return {
+            "investor_id": str(investor['id']),
+            "email": investor['email'],
+            "xrpl_address": investor['xrpl_address'],
+            "kyc_approved": investor['kyc_approved'],
+            "trust_line_created": investor['trust_line_created']
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/onboard", response_model=InvestorOnboardResponse)
 async def onboard_investor(request: InvestorOnboardRequest):
     """

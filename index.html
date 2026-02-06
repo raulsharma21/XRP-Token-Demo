@@ -144,52 +144,120 @@
 
         <!-- Tabs -->
         <div class="tabs">
-            <div class="tab active" onclick="showTab('onboard')">1. Get Started</div>
-            <div class="tab" onclick="showTab('buy')">2. Buy Tokens</div>
+            <div class="tab active" onclick="showTab('onboard')">1. Investor Initial Onboarding</div>
+            <div class="tab" onclick="showTab('buy')">2. Purchase Tokens (IPO)</div>
             <div class="tab" onclick="showTab('trade')">3. Trade</div>
             <div class="tab" onclick="showTab('dashboard')">4. Dashboard</div>
         </div>
 
         <!-- Onboard Tab -->
         <div id="onboardTab" class="card">
-            <h2>Get Started</h2>
-            
-            <div class="step-box">
-                <h3>Step 1: Connect Xaman Wallet</h3>
-                <p style="margin-bottom: 10px;">Connect your Xaman wallet to get started. Make sure you're on TESTNET!</p>
-                <div class="wallet-box" style="margin-top: 10px;">
-                    <div id="onboardWalletStatus">
-                        <button onclick="connectWalletOnboarding()">Connect Xaman Wallet</button>
+            <h2>Investor Initial Onboarding</h2>
+
+            <!-- Xaman Setup Flow -->
+            <div id="xamanSetup">
+                <div class="step-box">
+                    <h3>Step 1: Connect Wallet</h3>
+                    <p style="margin-bottom: 10px;">Follow the guide at XRPL.org Testnet Faucets to create a Testnet wallet and connect it to the Xaman app. Make sure you're on TESTNET!</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <div id="onboardWalletStatus">
+                                <button onclick="connectWalletOnboarding()" style="width: 100%;">Connect Xaman Wallet</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <button onclick="showSetupMethod('manual')" class="secondary" style="width: 100%;">Manual Setup</button>
+                        </div>
                     </div>
                 </div>
+
+                <div id="trustLineStep" class="step-box hidden">
+                    <h3>Step 2: Create Trust Line</h3>
+                    <p style="margin-bottom: 10px;">Create a trust line to receive IND tokens.</p>
+                    
+                    <div class="trust-info">
+                        <strong style="color: #60a5fa;">Trust Line Details:</strong><br>
+                        <span style="color: #94a3b8;">Currency:</span> <code>IND</code><br>
+                        <span style="color: #94a3b8;">Issuer:</span> <code>rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok</code>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Trust Line Limit (max tokens you can hold)</label>
+                        <input type="number" id="xamanTrustLineLimit" placeholder="100" value="100" min="1">
+                    </div>
+                    
+                    <button onclick="createTrustLine()" style="margin-top: 10px;">Create Trust Line in Xaman</button>
+                    <div id="trustLineMessage"></div>
+                </div>
+
+                <div id="registerStep" class="step-box hidden">
+                    <h3>Step 3: Register Your Email</h3>
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="emailInput" placeholder="your@email.com">
+                    </div>
+                    <div class="input-group">
+                        <label>XRPL Address (auto-filled)</label>
+                        <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" readonly>
+                    </div>
+                    <button onclick="onboard()">Complete Registration</button>
+                </div>
             </div>
 
-            <div id="trustLineStep" class="step-box hidden">
-                <h3>Step 2: Create Trust Line</h3>
-                <p style="margin-bottom: 10px;">Create a trust line to receive IND tokens.</p>
-                
-                <div class="trust-info">
-                    <strong style="color: #60a5fa;">Trust Line Details:</strong><br>
-                    <span style="color: #94a3b8;">Currency:</span> <code>IND</code><br>
-                    <span style="color: #94a3b8;">Issuer:</span> <code>rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok</code><br>
-                    <span style="color: #94a3b8;">Limit:</span> <code>1000000</code>
-                </div>
-                
-                <button onclick="createTrustLine()" style="margin-top: 10px;">Create Trust Line in Xaman</button>
-                <div id="trustLineMessage"></div>
-            </div>
+            <!-- Manual Setup Flow -->
+            <div id="manualSetup" class="hidden">
+                <button onclick="showSetupMethod('xaman')" class="secondary" style="margin-bottom: 15px; width: auto;">
+                    ← Back to Xaman Setup
+                </button>
 
-            <div id="registerStep" class="step-box hidden">
-                <h3>Step 3: Register Your Email</h3>
-                <div class="input-group">
-                    <label>Email</label>
-                    <input type="email" id="emailInput" placeholder="your@email.com">
+                <div class="step-box">
+                    <h3>Step 1: Create Testnet Wallet</h3>
+                    <p style="margin-bottom: 10px;">
+                        Follow the guide at <a href="https://xrpl.org/resources/dev-tools/xrp-faucets" target="_blank" style="color: #60a5fa;">XRPL.org Testnet Faucets</a> to create a Testnet wallet and fund it with test XRP.
+                    </p>
                 </div>
-                <div class="input-group">
-                    <label>XRPL Address (auto-filled)</label>
-                    <input type="text" id="xrplAddressInput" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" readonly>
+
+                <div class="step-box">
+                    <h3>Step 2: Enter Your XRPL Address</h3>
+                    <p style="margin-bottom: 10px;">Enter your Testnet XRPL address from your wallet.</p>
+                    <div class="input-group">
+                        <label>XRPL Address</label>
+                        <input type="text" id="manualXrplAddress" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+                    </div>
                 </div>
-                <button onclick="onboard()">Complete Registration</button>
+
+                <div class="step-box">
+                    <h3>Step 3: Create Trust Line</h3>
+                    <p style="margin-bottom: 10px;">Create a trust line to the IND token issuer from your wallet.</p>
+                    
+                    <div class="trust-info">
+                        <strong style="color: #60a5fa;">Trust Line Details:</strong><br>
+                        <span style="color: #94a3b8;">Currency:</span> <code>IND</code><br>
+                        <span style="color: #94a3b8;">Issuer:</span> <code>rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok</code>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 15px;">
+                        <label>Trust Line Limit (recommended: 100)</label>
+                        <input type="number" id="manualTrustLineLimit" placeholder="100" value="100" min="1" readonly style="background: #1e293b; color: #94a3b8;">
+                        <small style="color: #94a3b8; display: block; margin-top: 5px;">
+                            Use this value when creating the trust line in your wallet
+                        </small>
+                    </div>
+
+                    <label style="display: flex; align-items: center; margin-top: 15px; cursor: pointer;">
+                        <input type="checkbox" id="manualTrustLineConfirm" style="width: auto; margin-right: 10px;">
+                        <span style="color: #e2e8f0;">I have created the trust line with limit 100</span>
+                    </label>
+                </div>
+
+                <div class="step-box">
+                    <h3>Step 4: Register Your Email</h3>
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="manualEmailInput" placeholder="your@email.com">
+                    </div>
+                    <button onclick="manualOnboard()">Complete Registration</button>
+                </div>
             </div>
 
             <div id="onboardMessage"></div>
@@ -197,28 +265,74 @@
 
         <!-- Buy Tab -->
         <div id="buyTab" class="card hidden">
-            <h2>Buy IND Tokens</h2>
-            
-            <div class="message info">
-                <strong>How it works:</strong><br>
-                Enter your investor ID to get deposit instructions. Send XRP (simulating USDC on testnet) with the destination tag, and tokens will be issued automatically.
+            <h2>Purchase Tokens (IPO)</h2>
+
+            <!-- Xaman Purchase Flow -->
+            <div id="xamanPurchase">
+                <div class="step-box">
+                    <h3>Step 1: Connect Wallet</h3>
+                    <p style="margin-bottom: 10px;">Connect your XRPL wallet to begin the purchase process.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <div id="buyWalletStatus">
+                                <button onclick="connectWalletBuy()" style="width: 100%;">Connect Xaman Wallet</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <button onclick="showPurchaseMethod('manual')" class="secondary" style="width: 100%;">Manual Purchase</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="buyAmountSection" class="step-box hidden">
+                    <h3>Step 2: Enter Amount</h3>
+                    <p style="margin-bottom: 10px;">Enter the amount of XRP you want to spend to purchase IND tokens.</p>
+                    <div class="input-group">
+                        <label>Amount (XRP)</label>
+                        <input type="number" id="usdcAmount" placeholder="10" value="10">
+                    </div>
+                    <button onclick="initiatePurchase()">Sign Payment in Xaman</button>
+                </div>
             </div>
 
-            <div class="input-group" style="margin-top: 20px;">
-                <label>Investor ID (from registration)</label>
-                <input type="text" id="investorIdBuy" placeholder="uuid">
+            <!-- Manual Purchase Flow -->
+            <div id="manualPurchase" class="hidden">
+                <button onclick="showPurchaseMethod('xaman')" class="secondary" style="margin-bottom: 15px; width: auto;">
+                    ← Back to Xaman Purchase
+                </button>
+
+                <div class="step-box">
+                    <h3>Step 1: Initiate Purchase Request</h3>
+                    <p style="margin-bottom: 10px;">Enter your investor ID and purchase amount to get deposit instructions.</p>
+                    <div class="input-group">
+                        <label>Investor ID</label>
+                        <input type="text" id="manualInvestorId" placeholder="Your investor ID from registration">
+                    </div>
+                    <div class="input-group">
+                        <label>Amount (XRP)</label>
+                        <input type="number" id="manualPurchaseAmount" placeholder="10" value="10">
+                    </div>
+                    <button onclick="getManualDepositInstructions()">Get Deposit Instructions</button>
+                </div>
+
+                <div id="manualDepositInstructions" class="step-box hidden">
+                    <h3>Step 2: Send Payment</h3>
+                    <p style="margin-bottom: 10px;">Transfer XRP to the address below with the exact destination tag. Our monitor will detect the payment and automatically issue tokens.</p>
+                    <div id="manualDepositDetails"></div>
+                </div>
             </div>
-            <div class="input-group">
-                <label>Amount (XRP)</label>
-                <input type="number" id="usdcAmount" placeholder="10" value="10">
-            </div>
-            <button onclick="initiatePurchase()">Get Deposit Instructions</button>
+            
             <div id="buyMessage"></div>
         </div>
 
         <!-- Trade Tab -->
         <div id="tradeTab" class="card hidden">
             <h2>Trade on AMM</h2>
+            
+            <div class="message info" style="margin-bottom: 15px;">
+                <strong>Secondary Market Trading</strong><br>
+                Trade IND tokens directly through the AMM liquidity pool. Connect your XRPL wallet to begin trading.
+            </div>
             
             <!-- Wallet Connection -->
             <div class="wallet-box">
@@ -255,6 +369,13 @@
         <!-- Dashboard Tab -->
         <div id="dashboardTab" class="card hidden">
             <h2>Your Portfolio</h2>
+            
+            <div class="message info" style="margin-bottom: 15px;">
+                <strong>View Your Holdings</strong><br>
+                Enter your XRPL address to view your IND token balance and portfolio value.<br>
+                <small style="color: #94a3b8;">Find your address in your XRPL wallet, or connect your wallet in other tabs to auto-fill.</small>
+            </div>
+            
             <div class="input-group">
                 <label>Your XRPL Address</label>
                 <input type="text" id="dashboardAddress" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
@@ -265,8 +386,8 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000/api';
-        // const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
+        // const API_BASE = 'http://localhost:8000/api';
+        const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
         
         // REPLACE WITH YOUR XAMAN API KEY FROM https://apps.xumm.dev/
         const XAMAN_API_KEY = '4f521c1c-055c-44ba-a1ef-3f4b09622c59';
@@ -389,6 +510,14 @@
             }
             
             const msgEl = document.getElementById('trustLineMessage');
+            const limitInput = document.getElementById('xamanTrustLineLimit');
+            const limit = limitInput.value || '100';
+            
+            if (parseFloat(limit) <= 0) {
+                msgEl.innerHTML = '<div class="message error">✗ Trust line limit must be greater than 0</div>';
+                return;
+            }
+            
             msgEl.innerHTML = '<div class="message info">Creating trust line payload...</div>';
             
             try {
@@ -398,7 +527,7 @@
                     LimitAmount: {
                         currency: TOKEN_CODE,
                         issuer: TOKEN_ISSUER,
-                        value: '1000000'
+                        value: limit
                     }
                 };
                 
@@ -548,7 +677,77 @@
             }
         }
 
-        // Onboarding
+        // Setup method toggle
+        function showSetupMethod(method) {
+            const xamanSetup = document.getElementById('xamanSetup');
+            const manualSetup = document.getElementById('manualSetup');
+            const xamanBtn = document.getElementById('xamanSetupBtn');
+            const manualBtn = document.getElementById('manualSetupBtn');
+            
+            if (method === 'xaman') {
+                xamanSetup.classList.remove('hidden');
+                manualSetup.classList.add('hidden');
+                xamanBtn.style.background = '#3b82f6';
+                xamanBtn.style.color = 'white';
+                manualBtn.style.background = '#1e293b';
+                manualBtn.style.color = '#60a5fa';
+            } else {
+                xamanSetup.classList.add('hidden');
+                manualSetup.classList.remove('hidden');
+                manualBtn.style.background = '#3b82f6';
+                manualBtn.style.color = 'white';
+                xamanBtn.style.background = '#1e293b';
+                xamanBtn.style.color = '#60a5fa';
+            }
+            
+            // Clear any previous messages
+            document.getElementById('onboardMessage').innerHTML = '';
+        }
+
+        // Manual onboarding (no Xaman)
+        async function manualOnboard() {
+            const email = document.getElementById('manualEmailInput').value;
+            const address = document.getElementById('manualXrplAddress').value;
+            const trustLineConfirmed = document.getElementById('manualTrustLineConfirm').checked;
+            const msgEl = document.getElementById('onboardMessage');
+            
+            if (!email || !address) {
+                msgEl.innerHTML = '<div class="message error">✗ Please fill in all fields</div>';
+                return;
+            }
+            
+            if (!trustLineConfirmed) {
+                msgEl.innerHTML = '<div class="message error">✗ Please confirm you have created the trust line</div>';
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/onboard`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email, xrpl_address: address})
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    msgEl.innerHTML = `<div class="message success">
+                        ✓ Registration Complete!<br><br>
+                        <strong>Investor ID:</strong> <code>${data.investor_id}</code><br><br>
+                        <strong>Next Steps:</strong><br>
+                        1. Save your Investor ID above<br>
+                        2. Our team will review and approve your application<br>
+                        3. Once approved, you can purchase tokens in the "Buy Tokens" tab<br><br>
+                        <small>Approval usually takes 24-48 hours.</small>
+                    </div>`;
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                }
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ ${err.message}</div>`;
+            }
+        }
+
+        // Onboarding (Xaman flow)
         async function onboard() {
             const email = document.getElementById('emailInput').value;
             const address = document.getElementById('xrplAddressInput').value;
@@ -572,9 +771,9 @@
                         ✓ Registration Complete!<br><br>
                         <strong>Investor ID:</strong> <code>${data.investor_id}</code><br><br>
                         <strong>Next Steps:</strong><br>
-                        1. Copy your Investor ID above<br>
+                        1. Save your Investor ID above<br>
                         2. Our team will review and approve your application<br>
-                        3. Once approved, use the "Buy Tokens" tab with your Investor ID<br><br>
+                        3. Once approved, you can purchase tokens in the "Buy Tokens" tab<br><br>
                         <small>Approval usually takes 24-48 hours.</small>
                     </div>`;
                 } else {
@@ -585,40 +784,326 @@
             }
         }
 
-        // Purchase
-        async function initiatePurchase() {
-            const investorId = document.getElementById('investorIdBuy').value;
-            const amount = document.getElementById('usdcAmount').value;
+        // Connect wallet (buy tab version)
+        async function connectWalletBuy() {
+            const statusEl = document.getElementById('buyWalletStatus');
             const msgEl = document.getElementById('buyMessage');
+            const amountSection = document.getElementById('buyAmountSection');
+            
+            if (!xumm) {
+                statusEl.innerHTML = '<div class="message error">✗ Xaman SDK not initialized. Refresh the page.</div>';
+                return;
+            }
+            
+            try {
+                statusEl.innerHTML = '<div class="info">Opening Xaman app...</div>';
+                msgEl.innerHTML = '';
+                amountSection.classList.add('hidden');
+                
+                await xumm.authorize();
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                if (userWallet) {
+                    const networkWarning = userWallet.network !== 'TESTNET' 
+                        ? `<div class="message error" style="margin-top: 10px;">⚠️ Warning: You're on ${userWallet.network}. Please switch to TESTNET in Xaman settings!</div>`
+                        : '';
+                    
+                    statusEl.innerHTML = `
+                        <div style="color: #10b981;">
+                            ✓ Connected: <strong>${userWallet.address.substring(0, 12)}...</strong>
+                            <button class="secondary" onclick="disconnectWalletBuy()" style="margin-left: 10px;">Disconnect</button>
+                        </div>
+                        ${networkWarning}
+                    `;
+                    
+                    // Look up investor by wallet address
+                    msgEl.innerHTML = '<div class="message info">Looking up your investor account...</div>';
+                    
+                    try {
+                        const res = await fetch(`${API_BASE}/investors/by-address/${userWallet.address}`);
+                        
+                        if (res.ok) {
+                            const investor = await res.json();
+                            
+                            if (!investor.kyc_approved) {
+                                msgEl.innerHTML = '<div class="message error">✗ Your account is pending KYC approval. Please wait for admin approval.</div>';
+                                return;
+                            }
+                            
+                            if (!investor.trust_line_created) {
+                                msgEl.innerHTML = '<div class="message error">✗ Please create a trust line first in the "Get Started" tab.</div>';
+                                return;
+                            }
+                            
+                            msgEl.innerHTML = `<div class="message success">✓ Account verified: ${investor.email}</div>`;
+                            amountSection.classList.remove('hidden');
+                            
+                        } else if (res.status === 404) {
+                            msgEl.innerHTML = '<div class="message error">✗ No investor account found for this wallet. Please register in the "Get Started" tab first.</div>';
+                        } else {
+                            const data = await res.json();
+                            msgEl.innerHTML = `<div class="message error">✗ Error: ${data.detail || 'Failed to look up account'}</div>`;
+                        }
+                    } catch (lookupErr) {
+                        console.error('Investor lookup error:', lookupErr);
+                        msgEl.innerHTML = '<div class="message error">✗ Failed to look up investor account. Please try again.</div>';
+                    }
+                }
+                
+            } catch (err) {
+                console.error('Connection error:', err);
+                statusEl.innerHTML = `
+                    <div class="message error">
+                        ✗ Connection failed: ${err.message}
+                        <button onclick="connectWalletBuy()" style="margin-top: 10px;">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        function disconnectWalletBuy() {
+            if (xumm) {
+                xumm.logout();
+                document.getElementById('buyWalletStatus').innerHTML = 
+                    '<button onclick="connectWalletBuy()">Connect Xaman Wallet</button>';
+                document.getElementById('buyMessage').innerHTML = '';
+                document.getElementById('buyAmountSection').classList.add('hidden');
+            }
+        }
+
+        // Purchase method toggle
+        function showPurchaseMethod(method) {
+            const xamanPurchase = document.getElementById('xamanPurchase');
+            const manualPurchase = document.getElementById('manualPurchase');
+            
+            if (method === 'xaman') {
+                xamanPurchase.classList.remove('hidden');
+                manualPurchase.classList.add('hidden');
+            } else {
+                xamanPurchase.classList.add('hidden');
+                manualPurchase.classList.remove('hidden');
+            }
+            
+            // Clear any previous messages
+            document.getElementById('buyMessage').innerHTML = '';
+        }
+
+        // Manual purchase - get deposit instructions
+        async function getManualDepositInstructions() {
+            const investorId = document.getElementById('manualInvestorId').value;
+            const amount = parseFloat(document.getElementById('manualPurchaseAmount').value);
+            const msgEl = document.getElementById('buyMessage');
+            const instructionsSection = document.getElementById('manualDepositInstructions');
+            const detailsEl = document.getElementById('manualDepositDetails');
             
             if (!investorId) {
                 msgEl.innerHTML = '<div class="message error">✗ Please enter your Investor ID</div>';
                 return;
             }
             
+            if (!amount || amount <= 0) {
+                msgEl.innerHTML = '<div class="message error">✗ Please enter a valid amount</div>';
+                return;
+            }
+            
+            msgEl.innerHTML = '<div class="message info">Creating purchase request...</div>';
+            
             try {
                 const res = await fetch(`${API_BASE}/buy/initiate`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({investor_id: investorId, usdc_amount: parseFloat(amount)})
+                    body: JSON.stringify({investor_id: investorId, usdc_amount: amount})
                 });
                 const data = await res.json();
                 
-                if (res.ok) {
-                    const inst = data.deposit_instructions;
-                    msgEl.innerHTML = `<div class="message success">
-                        ✓ Purchase initiated!<br><br>
-                        <strong>Send ${inst.amount} XRP to:</strong><br>
-                        Address: <code>${inst.destination}</code><br>
-                        Destination Tag: <code style="font-size: 16px; color: #10b981;">${inst.destination_tag}</code><br><br>
-                        <small>⚠️ MUST include destination tag!<br>
-                        Tokens arrive automatically within 30 seconds.</small>
-                    </div>`;
-                } else {
+                if (!res.ok) {
                     msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                    instructionsSection.classList.add('hidden');
+                    return;
                 }
+                
+                const inst = data.deposit_instructions;
+                
+                detailsEl.innerHTML = `
+                    <div class="trust-info">
+                        <strong style="color: #60a5fa;">Deposit Instructions:</strong><br><br>
+                        <span style="color: #94a3b8;">Send Amount:</span> <code>${inst.amount} XRP</code><br>
+                        <span style="color: #94a3b8;">To Address:</span> <code>${inst.destination}</code><br>
+                        <span style="color: #94a3b8;">Destination Tag:</span> <code style="font-size: 16px; color: #10b981;">${inst.destination_tag}</code><br><br>
+                        <strong style="color: #ef4444;">⚠️ CRITICAL: You MUST include the destination tag!</strong><br><br>
+                        <small style="color: #94a3b8;">
+                            Send this exact amount with the destination tag from your wallet.<br>
+                            Tokens will be automatically issued within 30 seconds after payment is detected.
+                        </small>
+                    </div>
+                `;
+                
+                instructionsSection.classList.remove('hidden');
+                msgEl.innerHTML = '<div class="message success">✓ Deposit instructions generated. Send the payment from your wallet.</div>';
+                
             } catch (err) {
-                msgEl.innerHTML = `<div class="message error">✗ ${err.message}</div>`;
+                console.error('Error:', err);
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+                instructionsSection.classList.add('hidden');
+            }
+        }
+
+        // Purchase with Xaman
+        async function initiatePurchase() {
+            const amount = parseFloat(document.getElementById('usdcAmount').value);
+            const msgEl = document.getElementById('buyMessage');
+            
+            if (!userWallet) {
+                msgEl.innerHTML = '<div class="message error">✗ Please connect your Xaman wallet first</div>';
+                return;
+            }
+            
+            if (userWallet.network !== 'TESTNET') {
+                msgEl.innerHTML = `<div class="message error">✗ Please switch to TESTNET in Xaman app settings. Currently on: ${userWallet.network}</div>`;
+                return;
+            }
+            
+            if (!amount || amount <= 0) {
+                msgEl.innerHTML = '<div class="message error">✗ Please enter a valid amount</div>';
+                return;
+            }
+            
+            msgEl.innerHTML = '<div class="message info">Looking up your investor account...</div>';
+            
+            try {
+                const investorRes = await fetch(`${API_BASE}/investors/by-address/${userWallet.address}`);
+                
+                if (!investorRes.ok) {
+                    msgEl.innerHTML = '<div class="message error">✗ Could not find your investor account. Please register first.</div>';
+                    return;
+                }
+                
+                const investorData = await investorRes.json();
+                const investorId = investorData.investor_id;
+                
+                if (!investorId) {
+                    msgEl.innerHTML = '<div class="message error">✗ Invalid investor data. Please contact support.</div>';
+                    return;
+                }
+                
+                msgEl.innerHTML = '<div class="message info">Creating purchase request...</div>';
+                
+                const res = await fetch(`${API_BASE}/buy/initiate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({investor_id: investorId, usdc_amount: amount})
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                    return;
+                }
+                
+                const inst = data.deposit_instructions;
+                
+                msgEl.innerHTML = '<div class="message info">Creating payment transaction...</div>';
+                
+                const paymentTx = {
+                    TransactionType: 'Payment',
+                    Account: userWallet.address,
+                    Destination: inst.destination,
+                    DestinationTag: inst.destination_tag,
+                    Amount: String(Math.floor(amount * 1000000))
+                };
+                
+                const { created, resolved } = await xumm.payload.createAndSubscribe(
+                    { txjson: paymentTx },
+                    (eventMessage) => {
+                        if (eventMessage.data.signed === true || eventMessage.data.signed === false) {
+                            return eventMessage;
+                        }
+                    }
+                );
+                
+                msgEl.innerHTML = `
+                    <div class="message success">
+                        <strong>Sign payment in Xaman:</strong><br><br>
+                        <strong>Amount:</strong> ${amount} XRP<br>
+                        <strong>Destination Tag:</strong> ${inst.destination_tag}<br><br>
+                        <img src="${created.refs.qr_png}" style="max-width: 250px; border-radius: 8px;"><br><br>
+                        <a href="${created.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
+                            Or click here to open Xaman →
+                        </a><br><br>
+                        <small style="color: #94a3b8;">Waiting for signature...</small>
+                    </div>
+                `;
+                
+                const result = await resolved;
+                
+                if (result.data && result.data.signed === true) {
+                    const txid = result.data.txid;
+                    
+                    msgEl.innerHTML = '<div class="message info">Verifying transaction...</div>';
+                    
+                    try {
+                        let payloadResult = await xumm.payload.get(result.data.payload_uuidv4);
+                        let ledgerResult = payloadResult.response?.dispatched_result;
+                        
+                        if (ledgerResult === 'terQUEUED') {
+                            msgEl.innerHTML = '<div class="message info">Transaction queued, waiting for confirmation...</div>';
+                            
+                            for (let i = 0; i < 10; i++) {
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                payloadResult = await xumm.payload.get(result.data.payload_uuidv4);
+                                ledgerResult = payloadResult.response?.dispatched_result;
+                                
+                                if (ledgerResult && ledgerResult !== 'terQUEUED') {
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (ledgerResult === 'tesSUCCESS') {
+                            msgEl.innerHTML = `
+                                <div class="message success">
+                                    ✓ Payment sent successfully!<br><br>
+                                    <strong>TX Hash:</strong><br>
+                                    <code style="display: block; margin: 10px 0; font-size: 11px; word-break: break-all;">${txid}</code>
+                                    <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                        View on Explorer →
+                                    </a><br><br>
+                                    <strong>Tokens will arrive automatically within 30 seconds!</strong><br>
+                                    <small>The monitor will detect your payment and issue tokens to your wallet.</small>
+                                </div>
+                            `;
+                        } else {
+                            msgEl.innerHTML = `
+                                <div class="message error">
+                                    ✗ Payment failed on ledger<br><br>
+                                    <strong>Result:</strong> ${ledgerResult || 'Unknown'}<br>
+                                    <strong>TX Hash:</strong> ${txid}<br><br>
+                                    <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                        View on Explorer →
+                                    </a>
+                                </div>
+                            `;
+                        }
+                    } catch (fetchErr) {
+                        console.error('Error verifying payment:', fetchErr);
+                        msgEl.innerHTML = `
+                            <div class="message error">
+                                ✗ Could not verify transaction<br><br>
+                                <strong>TX Hash:</strong> ${txid}<br>
+                                <a href="https://testnet.xrpl.org/transactions/${txid}" target="_blank" style="color: #60a5fa;">
+                                    View on Explorer to check status →
+                                </a>
+                            </div>
+                        `;
+                    }
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ Payment rejected or expired</div>`;
+                }
+                
+            } catch (err) {
+                console.error('Purchase error:', err);
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message || 'Failed to create purchase'}</div>`;
             }
         }
 
