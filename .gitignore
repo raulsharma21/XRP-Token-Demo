@@ -72,3 +72,18 @@ htmlcov/
 *.tmp
 temp/
 tmp/
+
+# Claude Code
+.claude/
+
+# Excel/binary files
+*.xlsx
+
+# Fee model scripts
+generate_fee_model.py
+
+# Architecture documentation
+internal_token/*.md
+internal_token/CODEBASE_ANALYSIS.json
+internal_token/DIAGRAM_PREVIEW.html
+internal_token/generate_preview.py

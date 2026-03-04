@@ -115,39 +115,45 @@
         <h1>Indicia Internal Liquidity Pool</h1>
         <div class="subtitle">Testnet Demo - Token: IND</div>
 
-        <!-- Pool Stats -->
+        <!-- Fund Stats -->
         <div class="card">
-            <h2>Pool Statistics</h2>
-            <div id="poolStats">
+            <h2>Fund Statistics</h2>
+            <div id="fundStats">
                 <div class="stat">
-                    <span class="stat-label">Status</span>
-                    <span class="stat-value" id="poolStatus">Loading...</span>
+                    <span class="stat-label">Pricing Mode</span>
+                    <span class="stat-value" id="pricingMode">Loading...</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">Current Price</span>
-                    <span class="price" id="currentPrice">-</span>
+                    <span class="stat-label">Current NAV per Token</span>
+                    <span class="price" id="currentNAV">-</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">IND Reserve</span>
-                    <span class="stat-value" id="tokenReserve">-</span>
+                    <span class="stat-label">Total Fund Value</span>
+                    <span class="stat-value" id="totalFundValue">-</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">XRP Reserve</span>
-                    <span class="stat-value" id="xrpReserve">-</span>
+                    <span class="stat-label">Total Tokens Outstanding</span>
+                    <span class="stat-value" id="tokensOutstanding">-</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">Trading Fee</span>
-                    <span class="stat-value" id="tradingFee">-</span>
+                    <span class="stat-label">Last NAV Calculation</span>
+                    <span class="stat-value" id="lastCalculation">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Next Calculation</span>
+                    <span class="stat-value" id="nextCalculation">Daily at 00:00 UTC</span>
                 </div>
             </div>
         </div>
 
         <!-- Tabs -->
         <div class="tabs">
-            <div class="tab active" onclick="showTab('onboard')">1. Investor Initial Onboarding</div>
-            <div class="tab" onclick="showTab('buy')">2. Purchase Tokens (IPO)</div>
-            <div class="tab" onclick="showTab('trade')">3. Trade</div>
-            <div class="tab" onclick="showTab('dashboard')">4. Dashboard</div>
+            <div class="tab active" onclick="showTab('onboard')">1. Onboarding</div>
+            <div class="tab" onclick="showTab('buy')">2. Purchase</div>
+            <div class="tab" onclick="showTab('redeem')">3. Redeem</div>
+            <div class="tab" onclick="showTab('trade')">4. Trade</div>
+            <div class="tab" onclick="showTab('dashboard')">5. Dashboard</div>
+            <div class="tab" onclick="showTab('admin')">6. Admin</div>
         </div>
 
         <!-- Onboard Tab -->
@@ -325,6 +331,89 @@
             <div id="buyMessage"></div>
         </div>
 
+        <!-- Redeem Tab -->
+        <div id="redeemTab" class="card hidden">
+            <h2>Redeem Tokens</h2>
+
+            <div class="message info" style="margin-bottom: 15px;">
+                <strong>Exit the Fund</strong><br>
+                Redeem your IND tokens to receive USDC based on the current NAV. Connect your wallet or enter your investor details.
+            </div>
+
+            <!-- Xaman Redemption Flow -->
+            <div id="xamanRedeem">
+                <div class="step-box">
+                    <h3>Step 1: Connect Wallet</h3>
+                    <p style="margin-bottom: 10px;">Connect your XRPL wallet to begin the redemption process.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <div id="redeemWalletStatus">
+                                <button onclick="connectWalletRedeem()" style="width: 100%;">Connect Xaman Wallet</button>
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <button onclick="showRedeemMethod('manual')" class="secondary" style="width: 100%;">Manual Redemption</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="redeemAmountSection" class="step-box hidden">
+                    <h3>Step 2: Enter Token Amount</h3>
+                    <p style="margin-bottom: 10px;">Enter the number of IND tokens you want to redeem.</p>
+                    <div class="input-group">
+                        <label>Token Amount (IND)</label>
+                        <input type="number" id="redeemTokenAmount" placeholder="10" value="10">
+                    </div>
+                    <button onclick="initiateRedemption()">Create Redemption Request</button>
+                </div>
+
+                <div id="redeemInstructions" class="step-box hidden">
+                    <h3>Step 3: Send Tokens to Issuer</h3>
+                    <div id="redeemDetails"></div>
+                    <button onclick="signRedemptionInXaman()" style="margin-top: 15px;">Sign Transaction in Xaman</button>
+                </div>
+            </div>
+
+            <!-- Manual Redemption Flow -->
+            <div id="manualRedeem" class="hidden">
+                <button onclick="showRedeemMethod('xaman')" class="secondary" style="margin-bottom: 15px; width: auto;">
+                    ← Back to Xaman Redemption
+                </button>
+
+                <div class="step-box">
+                    <h3>Step 1: Enter Your Details</h3>
+                    <div class="input-group">
+                        <label>Your XRPL Address</label>
+                        <input type="text" id="manualRedeemAddress" placeholder="rXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+                    </div>
+                    <div class="input-group">
+                        <label>Token Amount (IND)</label>
+                        <input type="number" id="manualRedeemTokenAmount" placeholder="10">
+                    </div>
+                    <button onclick="initiateManualRedemption()">Create Redemption Request</button>
+                </div>
+
+                <div id="manualRedeemInstructions" class="step-box hidden">
+                    <h3>Step 2: Send Tokens to Issuer</h3>
+                    <div id="manualRedeemDetails"></div>
+                </div>
+            </div>
+
+            <!-- Check Redemption Status -->
+            <div class="step-box" style="margin-top: 20px;">
+                <h3>Check Redemption Status</h3>
+                <p style="margin-bottom: 10px;">Enter your redemption ID to check the status of your redemption.</p>
+                <div class="input-group">
+                    <label>Redemption ID</label>
+                    <input type="text" id="redemptionStatusId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                </div>
+                <button onclick="checkRedemptionStatus()">Check Status</button>
+                <div id="redemptionStatusDisplay"></div>
+            </div>
+
+            <div id="redeemMessage"></div>
+        </div>
+
         <!-- Trade Tab -->
         <div id="tradeTab" class="card hidden">
             <h2>Trade on AMM</h2>
@@ -383,11 +472,69 @@
             <button onclick="loadDashboard()">Load Portfolio</button>
             <div id="dashboardDisplay"></div>
         </div>
+
+        <!-- Admin Tab -->
+        <div id="adminTab" class="card hidden">
+            <h2>Admin Controls</h2>
+
+            <div class="message info" style="margin-bottom: 15px;">
+                <strong>Fund Administration</strong><br>
+                Control IPO phase, trigger NAV calculations, and manage trading balance for testing.
+            </div>
+
+            <!-- IPO Phase Control -->
+            <div class="card" style="background: #0f172a; margin-bottom: 20px;">
+                <h3 style="color: #60a5fa; margin-bottom: 15px; font-size: 16px;">IPO Phase Control</h3>
+                <div id="ipoStatusDisplay" style="margin-bottom: 15px; padding: 15px; background: #1e293b; border-radius: 4px;">
+                    <div class="stat"><span>Current Phase</span><span id="adminIpoPhase">Loading...</span></div>
+                    <div class="stat"><span>Pricing Mode</span><span id="adminPricingMode">Loading...</span></div>
+                    <div class="stat"><span>Current NAV</span><span id="adminCurrentNAV">Loading...</span></div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="setIPOPhase('active')" style="flex: 1;">Set IPO Active ($1.00)</button>
+                    <button onclick="setIPOPhase('closed')" style="flex: 1; background: #dc2626;">Close IPO (NAV Pricing)</button>
+                </div>
+                <div id="ipoPhaseMessage"></div>
+            </div>
+
+            <!-- NAV Calculation -->
+            <div class="card" style="background: #0f172a; margin-bottom: 20px;">
+                <h3 style="color: #60a5fa; margin-bottom: 15px; font-size: 16px;">NAV Calculation</h3>
+                <p style="color: #94a3b8; margin-bottom: 15px; font-size: 14px;">
+                    Manually trigger daily NAV calculation. This will calculate fees, update fund state, and publish new NAV.
+                </p>
+                <div class="input-group">
+                    <label>Notes (optional)</label>
+                    <input type="text" id="navCalculationNotes" placeholder="e.g., Manual calculation for testing">
+                </div>
+                <button onclick="triggerNAVCalculation()">Calculate NAV Now</button>
+                <div id="navCalculationDisplay" style="margin-top: 15px;"></div>
+            </div>
+
+            <!-- Trading Balance -->
+            <div class="card" style="background: #0f172a; margin-bottom: 20px;">
+                <h3 style="color: #60a5fa; margin-bottom: 15px; font-size: 16px;">Trading Balance</h3>
+                <p style="color: #94a3b8; margin-bottom: 15px; font-size: 14px;">
+                    Update the trading account balance (placeholder for testing). This simulates the balance held in the trading account.
+                </p>
+                <div id="balanceDisplay" style="margin-bottom: 15px; padding: 15px; background: #1e293b; border-radius: 4px;">
+                    <div class="stat"><span>Current Balance</span><span id="adminCurrentBalance">Loading...</span></div>
+                </div>
+                <div class="input-group">
+                    <label>New Balance (USD)</label>
+                    <input type="number" id="newTradingBalance" placeholder="145000.00" value="145000">
+                </div>
+                <button onclick="updateTradingBalance()">Update Balance</button>
+                <div id="balanceUpdateMessage"></div>
+            </div>
+
+            <div id="adminMessage"></div>
+        </div>
     </div>
 
     <script>
-        // const API_BASE = 'http://localhost:8000/api';
-        const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
+        const API_BASE = 'http://localhost:8000/api';
+        //const API_BASE = 'https://xrp-token-demo-production.up.railway.app/api';
         
         // REPLACE WITH YOUR XAMAN API KEY FROM https://apps.xumm.dev/
         const XAMAN_API_KEY = '4f521c1c-055c-44ba-a1ef-3f4b09622c59';
@@ -643,37 +790,49 @@
         }
 
         // Load pool stats
-        async function loadPoolStats() {
+        async function loadFundStats() {
             try {
-                const res = await fetch(`${API_BASE}/pool/info`);
-                const data = await res.json();
-                
-                if (data.pool_exists) {
-                    document.getElementById('poolStatus').textContent = '✓ Active';
-                    document.getElementById('poolStatus').className = 'stat-value success';
-                    document.getElementById('currentPrice').textContent = `${data.current_price_xrp.toFixed(4)} XRP`;
-                    document.getElementById('tokenReserve').textContent = `${data.token_reserve.toFixed(2)} IND`;
-                    document.getElementById('xrpReserve').textContent = `${data.xrp_reserve.toFixed(2)} XRP`;
-                    document.getElementById('tradingFee').textContent = `${data.trading_fee}%`;
+                // Fetch NAV data and IPO status in parallel
+                const [navRes, ipoRes] = await Promise.all([
+                    fetch(`${API_BASE}/nav`),
+                    fetch(`${API_BASE}/admin/ipo-status`)
+                ]);
 
-                    // Add pool address only if it doesn't exist yet
-                    if (!document.getElementById('poolAddressRow')) {
-                        const poolAddressRow = document.createElement('div');
-                        poolAddressRow.id = 'poolAddressRow';
-                        poolAddressRow.className = 'stat';
-                        poolAddressRow.innerHTML = `
-                            <span class="stat-label">Pool Address</span>
-                            <span class="stat-value" style="font-size: 12px;">${data.pool_address}</span>
-                        `;
-                        document.getElementById('poolStats').appendChild(poolAddressRow);
-                    }
+                const navData = await navRes.json();
+                const ipoData = await ipoRes.json();
+
+                // Update pricing mode
+                document.getElementById('pricingMode').textContent = ipoData.pricing_mode || 'IPO ($1.00 fixed)';
+                document.getElementById('pricingMode').className = ipoData.phase === 'active' ? 'stat-value warning' : 'stat-value success';
+
+                // Update NAV
+                document.getElementById('currentNAV').textContent = `$${navData.nav_per_token.toFixed(8)}`;
+
+                // Update total fund value
+                if (navData.total_fund_value) {
+                    document.getElementById('totalFundValue').textContent = `$${navData.total_fund_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                 } else {
-                    document.getElementById('poolStatus').textContent = 'IPO Phase';
-                    document.getElementById('poolStatus').className = 'stat-value warning';
+                    document.getElementById('totalFundValue').textContent = 'N/A';
                 }
+
+                // Update tokens outstanding
+                if (navData.total_tokens_outstanding) {
+                    document.getElementById('tokensOutstanding').textContent = `${navData.total_tokens_outstanding.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} IND`;
+                } else {
+                    document.getElementById('tokensOutstanding').textContent = 'N/A';
+                }
+
+                // Update last calculation
+                if (navData.calculated_at) {
+                    const calcDate = new Date(navData.calculated_at);
+                    document.getElementById('lastCalculation').textContent = calcDate.toLocaleString();
+                } else {
+                    document.getElementById('lastCalculation').textContent = 'No calculation yet';
+                }
+
             } catch (err) {
-                document.getElementById('poolStatus').textContent = '✗ Error';
-                document.getElementById('poolStatus').className = 'stat-value error';
+                console.error('Error loading fund stats:', err);
+                document.getElementById('pricingMode').textContent = '✗ Error loading';
             }
         }
 
@@ -924,8 +1083,14 @@
                 }
                 
                 const inst = data.deposit_instructions;
-                
+
                 detailsEl.innerHTML = `
+                    <div class="trust-info" style="margin-bottom: 15px;">
+                        <strong style="color: #60a5fa;">Pricing Information:</strong><br><br>
+                        <span style="color: #94a3b8;">Pricing Mode:</span> <code>${data.pricing_mode}</code><br>
+                        <span style="color: #94a3b8;">Current NAV:</span> <code>$${data.current_nav.toFixed(4)}</code><br>
+                        <span style="color: #94a3b8;">Expected Tokens:</span> <code style="color: #10b981;">${data.expected_tokens.toFixed(4)} IND</code><br>
+                    </div>
                     <div class="trust-info">
                         <strong style="color: #60a5fa;">Deposit Instructions:</strong><br><br>
                         <span style="color: #94a3b8;">Send Amount:</span> <code>${inst.amount} XRP</code><br>
@@ -1024,6 +1189,8 @@
                 
                 msgEl.innerHTML = `
                     <div class="message success">
+                        <strong>Pricing Information:</strong><br>
+                        Mode: <code>${data.pricing_mode}</code> | NAV: <code>$${data.current_nav.toFixed(4)}</code> | Expected: <code>${data.expected_tokens.toFixed(4)} IND</code><br><br>
                         <strong>Sign payment in Xaman:</strong><br><br>
                         <strong>Amount:</strong> ${amount} XRP<br>
                         <strong>Destination Tag:</strong> ${inst.destination_tag}<br><br>
@@ -1402,22 +1569,29 @@
         async function loadDashboard() {
             const address = document.getElementById('dashboardAddress').value;
             const display = document.getElementById('dashboardDisplay');
-            
+
             if (!address) {
                 display.innerHTML = '<div class="message error">✗ Please enter your XRPL address</div>';
                 return;
             }
-            
+
             try {
-                const res = await fetch(`${API_BASE}/dashboard/${address}`);
-                const data = await res.json();
-                
-                if (res.ok) {
+                // Fetch dashboard data and IPO status in parallel
+                const [dashRes, ipoRes] = await Promise.all([
+                    fetch(`${API_BASE}/dashboard/${address}`),
+                    fetch(`${API_BASE}/admin/ipo-status`)
+                ]);
+
+                const data = await dashRes.json();
+                const ipoData = await ipoRes.json();
+
+                if (dashRes.ok) {
                     display.innerHTML = `<div style="margin-top: 20px;">
                         <div class="stat"><span>Email</span><span>${data.email}</span></div>
                         <div class="stat"><span>Token Balance</span><span class="success">${data.token_balance} IND</span></div>
                         <div class="stat"><span>Estimated Value</span><span>$${data.estimated_value_usd.toFixed(2)}</span></div>
                         <div class="stat"><span>Current NAV</span><span>$${data.nav_per_token}</span></div>
+                        <div class="stat"><span>Pricing Mode</span><span>${ipoData.pricing_mode || 'Loading...'}</span></div>
                     </div>`;
                 } else {
                     display.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
@@ -1427,10 +1601,438 @@
             }
         }
 
+        // ==================== REDEMPTION FUNCTIONS ====================
+
+        let currentRedemption = null;
+
+        // Connect wallet for redemption
+        async function connectWalletRedeem() {
+            try {
+                const authorized = await xumm.authorize();
+                if (authorized) {
+                    userWallet = {
+                        address: xumm.user.account,
+                        network: xumm.user.networkType
+                    };
+                    document.getElementById('redeemWalletStatus').innerHTML = `
+                        <div class="success" style="padding: 10px; background: #064e3b; border-radius: 4px;">
+                            ✓ Connected: ${userWallet.address.substring(0, 10)}...
+                        </div>
+                    `;
+                    document.getElementById('redeemAmountSection').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('redeemWalletStatus').innerHTML = `<div class="message error">✗ ${err.message}</div>`;
+            }
+        }
+
+        // Toggle redemption method
+        function showRedeemMethod(method) {
+            const xamanRedeem = document.getElementById('xamanRedeem');
+            const manualRedeem = document.getElementById('manualRedeem');
+
+            if (method === 'xaman') {
+                xamanRedeem.classList.remove('hidden');
+                manualRedeem.classList.add('hidden');
+            } else {
+                xamanRedeem.classList.add('hidden');
+                manualRedeem.classList.remove('hidden');
+            }
+        }
+
+        // Initiate redemption with Xaman
+        async function initiateRedemption() {
+            const tokenAmount = parseFloat(document.getElementById('redeemTokenAmount').value);
+            const msgEl = document.getElementById('redeemMessage');
+
+            if (!userWallet) {
+                msgEl.innerHTML = '<div class="message error">✗ Please connect your wallet first</div>';
+                return;
+            }
+
+            if (!tokenAmount || tokenAmount <= 0) {
+                msgEl.innerHTML = '<div class="message error">✗ Please enter a valid token amount</div>';
+                return;
+            }
+
+            msgEl.innerHTML = '<div class="message info">Looking up your investor account...</div>';
+
+            try {
+                // Get investor ID
+                const investorRes = await fetch(`${API_BASE}/investors/by-address/${userWallet.address}`);
+                if (!investorRes.ok) {
+                    msgEl.innerHTML = '<div class="message error">✗ Could not find your investor account</div>';
+                    return;
+                }
+
+                const investorData = await investorRes.json();
+                const investorId = investorData.investor_id;
+
+                msgEl.innerHTML = '<div class="message info">Creating redemption request...</div>';
+
+                // Create redemption request
+                const res = await fetch(`${API_BASE}/redeem`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({investor_id: investorId, token_amount: tokenAmount})
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                    return;
+                }
+
+                currentRedemption = data;
+
+                // Show redemption instructions
+                document.getElementById('redeemDetails').innerHTML = `
+                    <div class="trust-info" style="margin-bottom: 15px;">
+                        <strong style="color: #60a5fa;">Redemption Details:</strong><br><br>
+                        <span style="color: #94a3b8;">Redemption ID:</span> <code>${data.redemption_id}</code><br>
+                        <span style="color: #94a3b8;">Tokens to Send:</span> <code>${data.token_amount} IND</code><br>
+                        <span style="color: #94a3b8;">Current NAV:</span> <code>$${data.current_nav.toFixed(8)}</code><br>
+                        <span style="color: #94a3b8;">Estimated USDC:</span> <code style="color: #10b981;">$${data.estimated_usdc.toFixed(2)}</code><br><br>
+                    </div>
+                    <div class="trust-info">
+                        <strong style="color: #60a5fa;">Send Tokens To:</strong><br><br>
+                        <span style="color: #94a3b8;">Destination:</span> <code>${data.issuer_address}</code><br>
+                        <span style="color: #94a3b8;">Destination Tag:</span> <code style="font-size: 16px; color: #10b981;">${data.destination_tag}</code><br><br>
+                        <strong style="color: #ef4444;">⚠️ CRITICAL: You MUST include the destination tag!</strong><br><br>
+                        <small style="color: #94a3b8;">
+                            You will automatically receive USDC after tokens are received and burned.
+                        </small>
+                    </div>
+                `;
+
+                document.getElementById('redeemInstructions').classList.remove('hidden');
+                msgEl.innerHTML = '<div class="message success">✓ Redemption request created. Review instructions below.</div>';
+
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Sign redemption transaction in Xaman
+        async function signRedemptionInXaman() {
+            const msgEl = document.getElementById('redeemMessage');
+
+            if (!currentRedemption) {
+                msgEl.innerHTML = '<div class="message error">✗ No redemption request found</div>';
+                return;
+            }
+
+            try {
+                msgEl.innerHTML = '<div class="message info">Creating token payment transaction...</div>';
+
+                // Create Payment transaction for IND tokens
+                const paymentTx = {
+                    TransactionType: 'Payment',
+                    Account: userWallet.address,
+                    Destination: currentRedemption.issuer_address,
+                    DestinationTag: currentRedemption.destination_tag,
+                    Amount: {
+                        currency: TOKEN_CODE,
+                        value: currentRedemption.token_amount.toString(),
+                        issuer: TOKEN_ISSUER
+                    }
+                };
+
+                const { created, resolved } = await xumm.payload.createAndSubscribe(
+                    { txjson: paymentTx },
+                    (eventMessage) => {
+                        if (eventMessage.data.signed === true || eventMessage.data.signed === false) {
+                            return eventMessage;
+                        }
+                    }
+                );
+
+                msgEl.innerHTML = `
+                    <div class="message success">
+                        <strong>Sign transaction in Xaman:</strong><br><br>
+                        <strong>Sending:</strong> ${currentRedemption.token_amount} IND<br>
+                        <strong>Destination Tag:</strong> ${currentRedemption.destination_tag}<br><br>
+                        <img src="${created.refs.qr_png}" style="max-width: 250px; border-radius: 8px;"><br><br>
+                        <a href="${created.next.always}" target="_blank" style="color: #60a5fa; font-weight: 600;">
+                            Or click here to open Xaman →
+                        </a><br><br>
+                        <small style="color: #94a3b8;">Waiting for signature...</small>
+                    </div>
+                `;
+
+                const result = await resolved;
+
+                if (result.data && result.data.signed === true) {
+                    msgEl.innerHTML = `
+                        <div class="message success">
+                            ✓ Transaction signed successfully!<br><br>
+                            <strong>Redemption ID:</strong> <code>${currentRedemption.redemption_id}</code><br><br>
+                            Your tokens have been sent to the issuer. You will receive USDC within 1-2 minutes.<br><br>
+                            Use the "Check Redemption Status" section below to track your redemption.
+                        </div>
+                    `;
+                } else {
+                    msgEl.innerHTML = '<div class="message error">✗ Transaction was rejected or cancelled</div>';
+                }
+
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Manual redemption initiate
+        async function initiateManualRedemption() {
+            const address = document.getElementById('manualRedeemAddress').value;
+            const tokenAmount = parseFloat(document.getElementById('manualRedeemTokenAmount').value);
+            const msgEl = document.getElementById('redeemMessage');
+
+            if (!address || !tokenAmount) {
+                msgEl.innerHTML = '<div class="message error">✗ Please fill in all fields</div>';
+                return;
+            }
+
+            msgEl.innerHTML = '<div class="message info">Looking up your investor account...</div>';
+
+            try {
+                // Get investor ID
+                const investorRes = await fetch(`${API_BASE}/investors/by-address/${address}`);
+                if (!investorRes.ok) {
+                    msgEl.innerHTML = '<div class="message error">✗ Could not find your investor account</div>';
+                    return;
+                }
+
+                const investorData = await investorRes.json();
+                const investorId = investorData.investor_id;
+
+                msgEl.innerHTML = '<div class="message info">Creating redemption request...</div>';
+
+                // Create redemption request
+                const res = await fetch(`${API_BASE}/redeem`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({investor_id: investorId, token_amount: tokenAmount})
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                    return;
+                }
+
+                // Show redemption instructions
+                document.getElementById('manualRedeemDetails').innerHTML = `
+                    <div class="trust-info" style="margin-bottom: 15px;">
+                        <strong style="color: #60a5fa;">Redemption Details:</strong><br><br>
+                        <span style="color: #94a3b8;">Redemption ID:</span> <code>${data.redemption_id}</code><br>
+                        <span style="color: #94a3b8;">Tokens to Send:</span> <code>${data.token_amount} IND</code><br>
+                        <span style="color: #94a3b8;">Current NAV:</span> <code>$${data.current_nav.toFixed(8)}</code><br>
+                        <span style="color: #94a3b8;">Estimated USDC:</span> <code style="color: #10b981;">$${data.estimated_usdc.toFixed(2)}</code><br><br>
+                    </div>
+                    <div class="trust-info">
+                        <strong style="color: #60a5fa;">Send Tokens From Your Wallet:</strong><br><br>
+                        <span style="color: #94a3b8;">Currency:</span> <code>IND</code><br>
+                        <span style="color: #94a3b8;">Amount:</span> <code>${data.token_amount}</code><br>
+                        <span style="color: #94a3b8;">Destination:</span> <code>${data.issuer_address}</code><br>
+                        <span style="color: #94a3b8;">Destination Tag:</span> <code style="font-size: 16px; color: #10b981;">${data.destination_tag}</code><br><br>
+                        <strong style="color: #ef4444;">⚠️ CRITICAL: You MUST include the destination tag!</strong><br><br>
+                        <small style="color: #94a3b8;">
+                            Send this exact amount of IND tokens with the destination tag from your wallet.<br>
+                            You will automatically receive USDC after tokens are received and burned.
+                        </small>
+                    </div>
+                `;
+
+                document.getElementById('manualRedeemInstructions').classList.remove('hidden');
+                msgEl.innerHTML = '<div class="message success">✓ Redemption request created. Send tokens from your wallet using the instructions above.</div>';
+
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Check redemption status
+        async function checkRedemptionStatus() {
+            const redemptionId = document.getElementById('redemptionStatusId').value;
+            const display = document.getElementById('redemptionStatusDisplay');
+
+            if (!redemptionId) {
+                display.innerHTML = '<div class="message error">✗ Please enter a redemption ID</div>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/redeem/status/${redemptionId}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    display.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                    return;
+                }
+
+                let statusClass = 'info';
+                if (data.status === 'completed') statusClass = 'success';
+                else if (data.status === 'failed') statusClass = 'error';
+
+                display.innerHTML = `
+                    <div class="message ${statusClass}" style="margin-top: 15px;">
+                        <strong>Redemption Status:</strong> ${data.status.toUpperCase()}<br><br>
+                        <strong>Tokens:</strong> ${data.token_amount} IND<br>
+                        ${data.nav_price ? `<strong>NAV Used:</strong> $${data.nav_price}<br>` : ''}
+                        ${data.usdc_amount ? `<strong>USDC Received:</strong> $${data.usdc_amount.toFixed(2)}<br>` : ''}
+                        ${data.redemption_tx_hash ? `<strong>Payment TX:</strong> <code>${data.redemption_tx_hash}</code><br>` : ''}
+                        ${data.burn_tx_hash ? `<strong>Burn TX:</strong> <code>${data.burn_tx_hash}</code><br>` : ''}
+                    </div>
+                `;
+
+            } catch (err) {
+                display.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // ==================== ADMIN FUNCTIONS ====================
+
+        // Load admin panel status
+        async function loadAdminStatus() {
+            try {
+                const [ipoRes, balanceRes] = await Promise.all([
+                    fetch(`${API_BASE}/admin/ipo-status`),
+                    fetch(`${API_BASE}/admin/trading-balance`)
+                ]);
+
+                const ipoData = await ipoRes.json();
+                const balanceData = await balanceRes.json();
+
+                // Update IPO status
+                document.getElementById('adminIpoPhase').textContent = ipoData.phase === 'active' ? 'Active (IPO)' : 'Closed (Post-IPO)';
+                document.getElementById('adminPricingMode').textContent = ipoData.pricing_mode;
+                document.getElementById('adminCurrentNAV').textContent = `$${ipoData.current_nav.toFixed(8)}`;
+
+                // Update trading balance
+                document.getElementById('adminCurrentBalance').textContent = balanceData.formatted;
+
+            } catch (err) {
+                console.error('Error loading admin status:', err);
+            }
+        }
+
+        // Set IPO phase
+        async function setIPOPhase(phase) {
+            const msgEl = document.getElementById('ipoPhaseMessage');
+            msgEl.innerHTML = '<div class="message info">Updating IPO phase...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/toggle-ipo`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({phase})
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    msgEl.innerHTML = `<div class="message success">✓ ${data.message}</div>`;
+                    await loadAdminStatus();
+                    await loadFundStats();
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                }
+
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Trigger NAV calculation
+        async function triggerNAVCalculation() {
+            const notes = document.getElementById('navCalculationNotes').value;
+            const display = document.getElementById('navCalculationDisplay');
+            display.innerHTML = '<div class="message info">Calculating NAV... This may take a few seconds.</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/calculate-nav`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({notes: notes || null})
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    display.innerHTML = `
+                        <div class="message success">
+                            <strong>✓ NAV Calculated Successfully</strong><br><br>
+                            <strong>Date:</strong> ${new Date(data.calculation_date).toLocaleDateString()}<br>
+                            <strong>NAV per Token:</strong> $${data.nav_per_token.toFixed(8)}<br>
+                            <strong>NAV Before Fees:</strong> $${data.nav_before_fees.toFixed(8)}<br>
+                            <strong>Management Fee:</strong> $${data.management_fee.toFixed(2)}<br>
+                            <strong>Performance Fee:</strong> $${data.performance_fee.toFixed(2)}<br>
+                            <strong>Total Fees:</strong> $${data.total_fees.toFixed(2)}<br>
+                            <strong>Fund HWM:</strong> $${data.fund_hwm.toFixed(8)}<br>
+                            <strong>Total Tokens:</strong> ${data.total_tokens.toLocaleString()}
+                        </div>
+                    `;
+                    await loadFundStats();
+                    await loadAdminStatus();
+                } else {
+                    display.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                }
+
+            } catch (err) {
+                display.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
+        // Update trading balance
+        async function updateTradingBalance() {
+            const balance = parseFloat(document.getElementById('newTradingBalance').value);
+            const msgEl = document.getElementById('balanceUpdateMessage');
+
+            if (!balance || balance < 0) {
+                msgEl.innerHTML = '<div class="message error">✗ Please enter a valid balance</div>';
+                return;
+            }
+
+            msgEl.innerHTML = '<div class="message info">Updating balance...</div>';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/update-balance`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({balance})
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    msgEl.innerHTML = `<div class="message success">✓ ${data.message}</div>`;
+                    await loadAdminStatus();
+                } else {
+                    msgEl.innerHTML = `<div class="message error">✗ ${data.detail}</div>`;
+                }
+
+            } catch (err) {
+                msgEl.innerHTML = `<div class="message error">✗ Error: ${err.message}</div>`;
+            }
+        }
+
         // Initialize on page load
         initXaman();
-        loadPoolStats();
-        setInterval(loadPoolStats, 30000);
+        loadFundStats();
+        setInterval(loadFundStats, 30000);
+
+        // Load admin status when admin tab is opened
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    if (this.textContent.includes('Admin')) {
+                        loadAdminStatus();
+                    }
+                });
+            });
+        });
 
     </script>
 </body>

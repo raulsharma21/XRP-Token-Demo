@@ -6,7 +6,7 @@ Uses asyncpg for async Postgres operations
 import asyncpg
 import os
 from typing import Optional, Dict, List, Any
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from dotenv import load_dotenv
 
@@ -334,20 +334,24 @@ class PurchaseDB:
 
 class RedemptionDB:
     """Database operations for redemptions"""
-    
+
     @staticmethod
-    async def create(investor_id: str, token_amount: Decimal) -> Dict[str, Any]:
-        """Create redemption request"""
+    async def create(
+        investor_id: str,
+        token_amount: Decimal,
+        destination_tag: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Create redemption request with optional destination tag"""
         row = await db.fetchrow(
             """
-            INSERT INTO redemptions (investor_id, token_amount, status)
-            VALUES ($1, $2, 'queued')
-            RETURNING id, investor_id, token_amount, status, requested_at
+            INSERT INTO redemptions (investor_id, token_amount, status, destination_tag)
+            VALUES ($1, $2, 'queued', $3)
+            RETURNING id, investor_id, token_amount, status, destination_tag, requested_at
             """,
-            investor_id, token_amount
+            investor_id, token_amount, destination_tag
         )
         return dict(row)
-    
+
     @staticmethod
     async def get_by_id(redemption_id: str) -> Optional[Dict[str, Any]]:
         """Get redemption by ID"""
@@ -356,7 +360,21 @@ class RedemptionDB:
             redemption_id
         )
         return dict(row) if row else None
-    
+
+    @staticmethod
+    async def get_by_destination_tag(destination_tag: int) -> Optional[Dict[str, Any]]:
+        """Get redemption by destination tag (for matching IND token payments)"""
+        row = await db.fetchrow(
+            """
+            SELECT * FROM redemptions
+            WHERE destination_tag = $1 AND status = 'queued'
+            ORDER BY requested_at DESC
+            LIMIT 1
+            """,
+            destination_tag
+        )
+        return dict(row) if row else None
+
     @staticmethod
     async def get_queued() -> List[Dict[str, Any]]:
         """Get all queued redemptions"""
@@ -370,7 +388,25 @@ class RedemptionDB:
             """
         )
         return [dict(row) for row in rows]
-    
+
+    @staticmethod
+    async def mark_detected(
+        redemption_id: str,
+        burn_tx_hash: str
+    ) -> bool:
+        """Mark redemption as detected (IND tokens received at issuer)"""
+        result = await db.execute(
+            """
+            UPDATE redemptions
+            SET status = 'detected',
+                burn_tx_hash = $2,
+                detected_at = NOW()
+            WHERE id = $1
+            """,
+            redemption_id, burn_tx_hash
+        )
+        return result == "UPDATE 1"
+
     @staticmethod
     async def complete(
         redemption_id: str,
@@ -378,7 +414,7 @@ class RedemptionDB:
         usdc_amount: Decimal,
         redemption_tx_hash: str
     ) -> bool:
-        """Mark redemption as completed"""
+        """Mark redemption as completed (USDC sent to investor)"""
         result = await db.execute(
             """
             UPDATE redemptions
@@ -392,7 +428,7 @@ class RedemptionDB:
             redemption_id, nav_price, usdc_amount, redemption_tx_hash
         )
         return result == "UPDATE 1"
-    
+
     @staticmethod
     async def get_by_investor(investor_id: str) -> List[Dict[str, Any]]:
         """Get all redemptions for an investor"""
@@ -402,65 +438,141 @@ class RedemptionDB:
         )
         return [dict(row) for row in rows]
 
-# ==================== NAV OPERATIONS ====================
+    @staticmethod
+    async def get_detected() -> List[Dict[str, Any]]:
+        """Get redemptions that have been detected but not yet completed"""
+        rows = await db.fetch(
+            """
+            SELECT r.*, i.xrpl_address, i.email
+            FROM redemptions r
+            JOIN investors i ON r.investor_id = i.id
+            WHERE r.status = 'detected'
+            ORDER BY r.detected_at
+            """
+        )
+        return [dict(row) for row in rows]
 
-class NAVDB:
-    """Database operations for NAV"""
-    
+# ==================== FUND STATE OPERATIONS ====================
+
+class FundStateDB:
+    """Database operations for fund state and NAV calculations"""
+
     @staticmethod
     async def create(
-        nav_per_token: Decimal,
-        total_fund_value: Decimal,
+        calculation_date: date,
+        trading_balance_pre_fees: Decimal,
         total_tokens_outstanding: Decimal,
-        coinbase_balance: Optional[Decimal] = None,
-        pool_usdc_reserve: Optional[Decimal] = None,
-        pool_token_reserve: Optional[Decimal] = None
+        nav_before_fees: Decimal,
+        fund_hwm_before: Decimal,
+        management_fee_daily_rate: Decimal,
+        management_fee_amount: Decimal,
+        performance_fee_rate: Decimal,
+        performance_fee_amount: Decimal,
+        performance_fee_basis: Optional[Decimal],
+        total_fees_collected: Decimal,
+        trading_balance_post_fees: Decimal,
+        nav_per_token: Decimal,
+        fund_hwm_after: Decimal,
+        hwm_increased: bool,
+        fee_withdrawal_tx_hash: Optional[str] = None,
+        notes: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Record new NAV calculation"""
+        """Create new fund state record (daily NAV calculation)"""
         row = await db.fetchrow(
             """
-            INSERT INTO nav_history (
-                nav_per_token, 
-                total_fund_value, 
+            INSERT INTO fund_state (
+                calculation_date,
+                trading_balance_pre_fees,
                 total_tokens_outstanding,
-                coinbase_balance,
-                pool_usdc_reserve,
-                pool_token_reserve
+                nav_before_fees,
+                fund_hwm_before,
+                management_fee_daily_rate,
+                management_fee_amount,
+                performance_fee_rate,
+                performance_fee_amount,
+                performance_fee_basis,
+                total_fees_collected,
+                trading_balance_post_fees,
+                nav_per_token,
+                fund_hwm_after,
+                hwm_increased,
+                fee_withdrawal_tx_hash,
+                notes
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING *
             """,
-            nav_per_token, total_fund_value, total_tokens_outstanding,
-            coinbase_balance, pool_usdc_reserve, pool_token_reserve
+            calculation_date,
+            trading_balance_pre_fees,
+            total_tokens_outstanding,
+            nav_before_fees,
+            fund_hwm_before,
+            management_fee_daily_rate,
+            management_fee_amount,
+            performance_fee_rate,
+            performance_fee_amount,
+            performance_fee_basis,
+            total_fees_collected,
+            trading_balance_post_fees,
+            nav_per_token,
+            fund_hwm_after,
+            hwm_increased,
+            fee_withdrawal_tx_hash,
+            notes
         )
         return dict(row)
-    
+
     @staticmethod
     async def get_latest() -> Optional[Dict[str, Any]]:
-        """Get most recent NAV"""
+        """Get most recent fund state"""
         row = await db.fetchrow(
-            "SELECT * FROM nav_history ORDER BY calculated_at DESC LIMIT 1"
+            """
+            SELECT * FROM fund_state
+            ORDER BY calculation_date DESC, calculated_at DESC
+            LIMIT 1
+            """
         )
         return dict(row) if row else None
-    
+
+    @staticmethod
+    async def get_by_date(calculation_date: date) -> Optional[Dict[str, Any]]:
+        """Get fund state for specific date"""
+        row = await db.fetchrow(
+            "SELECT * FROM fund_state WHERE calculation_date = $1",
+            calculation_date
+        )
+        return dict(row) if row else None
+
     @staticmethod
     async def get_current_nav_value() -> Decimal:
         """Get current NAV per token (or 1.0 if none exists)"""
-        result = await db.fetchval(
-            "SELECT get_current_nav()"
-        )
+        result = await db.fetchval("SELECT get_current_nav()")
         return result or Decimal('1.0')
-    
+
+    @staticmethod
+    async def get_current_hwm() -> Decimal:
+        """Get current fund-wide high water mark"""
+        result = await db.fetchval("SELECT get_current_fund_hwm()")
+        return result or Decimal('1.0')
+
     @staticmethod
     async def get_history(days: int = 30) -> List[Dict[str, Any]]:
-        """Get NAV history for last N days"""
+        """Get fund state history for last N days"""
         rows = await db.fetch(
             """
-            SELECT * FROM nav_history 
-            WHERE calculated_at >= NOW() - INTERVAL $1
-            ORDER BY calculated_at DESC
+            SELECT * FROM fund_state
+            WHERE calculation_date >= CURRENT_DATE - make_interval(days => $1)
+            ORDER BY calculation_date DESC
             """,
-            f'{days} days'
+            days
+        )
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    async def get_all() -> List[Dict[str, Any]]:
+        """Get all fund state records"""
+        rows = await db.fetch(
+            "SELECT * FROM fund_state ORDER BY calculation_date DESC"
         )
         return [dict(row) for row in rows]
 
@@ -566,9 +678,13 @@ if __name__ == "__main__":
         
         try:
             # Test connection by getting current NAV
-            nav = await NAVDB.get_current_nav_value()
+            nav = await FundStateDB.get_current_nav_value()
             print(f"✓ Current NAV: ${nav}")
-            
+
+            # Get current HWM
+            hwm = await FundStateDB.get_current_hwm()
+            print(f"✓ Current Fund HWM: ${hwm}")
+
             # Get stats
             total_investors = await StatsDB.get_total_investors()
             print(f"✓ Total investors: {total_investors}")

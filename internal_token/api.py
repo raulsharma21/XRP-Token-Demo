@@ -17,8 +17,16 @@ from dotenv import load_dotenv
 # Import our database module
 from database import (
     db, init_database, close_database,
-    InvestorDB, PurchaseDB, RedemptionDB, NAVDB, SystemConfigDB, StatsDB
+    InvestorDB, PurchaseDB, RedemptionDB, FundStateDB, SystemConfigDB, StatsDB
 )
+
+# Import redemption processor and fee calculator
+from redemption_processor import create_redemption_request
+from fee_calculator import calculate_subscription_tokens
+
+# Import NAV calculator and trading account for admin endpoints
+from nav_calculator import calculate_and_save_nav
+from trading_account import get_trading_client
 
 # Import XRPL utilities
 from xrpl_utils import (
@@ -116,6 +124,8 @@ class PurchaseInitiateResponse(BaseModel):
     purchase_id: str
     deposit_instructions: dict
     expected_tokens: float
+    current_nav: float
+    pricing_mode: str  # "IPO" or "NAV"
 
 class PurchaseStatusResponse(BaseModel):
     purchase_id: str
@@ -132,8 +142,11 @@ class RedeemRequest(BaseModel):
 class RedeemResponse(BaseModel):
     redemption_id: str
     token_amount: float
+    estimated_usdc: float
+    current_nav: float
+    destination_tag: int
+    issuer_address: str
     status: str
-    settlement_time: str
     message: str
 
 # NAV models
@@ -423,17 +436,35 @@ async def initiate_purchase(request: PurchaseInitiateRequest):
         
         # Generate destination tag
         destination_tag = generate_unique_destination_tag()
-        
+
+        # Calculate expected tokens based on current pricing mode
+        ipo_phase = await SystemConfigDB.get('ipo_phase')
+        is_ipo_active = ipo_phase == 'active' if ipo_phase else True
+
+        if is_ipo_active:
+            # IPO phase: Fixed $1.00 pricing
+            current_nav = Decimal('1.00')
+            expected_tokens = Decimal(str(request.usdc_amount))  # 1:1 ratio
+            pricing_mode = "IPO"
+        else:
+            # Post-IPO: Use current NAV
+            current_nav = await FundStateDB.get_current_nav_value()
+            expected_tokens = calculate_subscription_tokens(
+                Decimal(str(request.usdc_amount)),
+                current_nav
+            )
+            pricing_mode = "NAV"
+
         # Create purchase record
         purchase = await PurchaseDB.create(
             investor_id=request.investor_id,
             usdc_amount=Decimal(str(request.usdc_amount)),
             destination_tag=destination_tag
         )
-        
+
         # Get deposit wallet address from wallet manager
         deposit_address = wallet_manager.deposit_wallet.address
-        
+
         return PurchaseInitiateResponse(
             purchase_id=str(purchase['id']),
             deposit_instructions={
@@ -442,10 +473,13 @@ async def initiate_purchase(request: PurchaseInitiateRequest):
                 "destination": deposit_address,
                 "destination_tag": destination_tag,
                 "memo": str(purchase['id']),
-                "message": "Send exact amount. Tokens will be issued automatically within 5 minutes.",
-                "important": "Include the destination tag or your deposit cannot be processed!"
+                "message": f"Send exact amount. You will receive approximately {float(expected_tokens):.4f} IND tokens at ${float(current_nav):.4f} per token.",
+                "important": "Include the destination tag or your deposit cannot be processed!",
+                "pricing": f"{pricing_mode} - ${float(current_nav):.4f} per token"
             },
-            expected_tokens=request.usdc_amount  # 1:1 during IPO
+            expected_tokens=float(expected_tokens),
+            current_nav=float(current_nav),
+            pricing_mode=pricing_mode
         )
         
     except HTTPException:
@@ -484,32 +518,32 @@ async def check_purchase_status(purchase_id: str):
 @app.get("/api/nav", response_model=NAVResponse)
 async def get_current_nav():
     """
-    Get current NAV per token
-    
+    Get current NAV per token (public endpoint)
+
     - Returns latest NAV calculation
     - Total fund value and tokens outstanding
-    - Next calculation time (EOD)
+    - Next calculation time (00:00 UTC daily)
     """
     try:
-        latest_nav = await NAVDB.get_latest()
-        
+        latest_nav = await FundStateDB.get_latest()
+
         if not latest_nav:
             return NAVResponse(
                 nav_per_token=1.0,
                 total_fund_value=None,
                 total_tokens_outstanding=None,
                 calculated_at=None,
-                next_calculation="Today 4:00 PM PST"
+                next_calculation="Daily at 00:00 UTC"
             )
-        
+
         return NAVResponse(
             nav_per_token=float(latest_nav['nav_per_token']),
-            total_fund_value=float(latest_nav['total_fund_value']),
+            total_fund_value=float(latest_nav['trading_balance_post_fees']),
             total_tokens_outstanding=float(latest_nav['total_tokens_outstanding']),
             calculated_at=latest_nav['calculated_at'].isoformat(),
-            next_calculation="Today 4:00 PM PST"
+            next_calculation="Daily at 00:00 UTC"
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -518,35 +552,31 @@ async def get_current_nav():
 @app.post("/api/redeem", response_model=RedeemResponse)
 async def request_redemption(request: RedeemRequest):
     """
-    Queue redemption request (settles at EOD NAV)
-    
-    - Validates investor has sufficient balance
-    - Queues redemption for EOD settlement
-    - Returns expected settlement time
+    Create redemption request with destination tag
+
+    - Validates investor exists
+    - Calculates estimated USDC value at current NAV
+    - Returns destination tag for sending IND tokens
+    - Monitor auto-processes when tokens received
     """
     try:
-        # Verify investor
-        investor = await InvestorDB.get_by_id(request.investor_id)
-        if not investor:
-            raise HTTPException(status_code=404, detail="Investor not found")
-        
-        # TODO: Verify investor actually holds this many tokens
-        # Would need to query XRPL for their balance
-        
-        # Queue redemption
-        redemption = await RedemptionDB.create(
+        # Create redemption request (includes destination tag generation)
+        redemption = await create_redemption_request(
             investor_id=request.investor_id,
             token_amount=Decimal(str(request.token_amount))
         )
-        
+
         return RedeemResponse(
-            redemption_id=str(redemption['id']),
-            token_amount=request.token_amount,
+            redemption_id=redemption['redemption_id'],
+            token_amount=float(redemption['token_amount']),
+            estimated_usdc=float(redemption['estimated_usdc']),
+            current_nav=float(redemption['current_nav']),
+            destination_tag=redemption['destination_tag'],
+            issuer_address=wallet_manager.cold_wallet.address,
             status="queued",
-            settlement_time="Today 4:00 PM PST",
-            message="Redemption queued. Will settle at end-of-day NAV price."
+            message=f"Send {request.token_amount} IND tokens to issuer with destination tag {redemption['destination_tag']}. Tokens will be burned and you will receive approximately ${float(redemption['estimated_usdc']):.2f} USDC."
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -818,7 +848,7 @@ async def get_investor_dashboard(xrpl_address: str):
             raise HTTPException(status_code=404, detail="Dashboard data not found")
         
         # Get current NAV
-        nav = await NAVDB.get_current_nav_value()
+        nav = await FundStateDB.get_current_nav_value()
         
         # Get actual token balance from XRPL
         token_balance_xrpl = await get_token_balance(xrpl_address)
@@ -868,7 +898,7 @@ async def get_system_stats():
         total_investors = await StatsDB.get_total_investors()
         total_raised = await StatsDB.get_total_raised()
         total_tokens = await StatsDB.get_total_tokens_issued()
-        current_nav = await NAVDB.get_current_nav_value()
+        current_nav = await FundStateDB.get_current_nav_value()
         
         ipo_phase = await SystemConfigDB.get('ipo_phase')
         pool_created = await SystemConfigDB.is_pool_created()
@@ -882,6 +912,143 @@ async def get_system_stats():
             pool_created=pool_created
         )
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== ADMIN ENDPOINTS ====================
+
+class ToggleIPORequest(BaseModel):
+    phase: str = Field(..., description="Either 'active' or 'closed'")
+
+class CalculateNAVRequest(BaseModel):
+    notes: Optional[str] = Field(None, description="Optional notes for this calculation")
+
+class UpdateBalanceRequest(BaseModel):
+    balance: float = Field(..., description="New trading balance")
+
+@app.post("/api/admin/toggle-ipo")
+async def toggle_ipo_phase(request: ToggleIPORequest):
+    """
+    Toggle IPO phase between active ($1.00 fixed) and closed (NAV pricing)
+
+    - active: Subscriptions use fixed $1.00 pricing
+    - closed: Subscriptions use current NAV pricing
+    """
+    try:
+        if request.phase not in ['active', 'closed']:
+            raise HTTPException(
+                status_code=400,
+                detail="Phase must be 'active' or 'closed'"
+            )
+
+        # Update system config
+        await SystemConfigDB.set('ipo_phase', request.phase)
+
+        # Get current NAV for response
+        current_nav = await FundStateDB.get_current_nav_value()
+
+        return {
+            "success": True,
+            "phase": request.phase,
+            "current_nav": float(current_nav),
+            "message": f"IPO phase set to '{request.phase}'. " +
+                      (f"Subscriptions now use fixed $1.00 pricing." if request.phase == 'active'
+                       else f"Subscriptions now use NAV pricing (${float(current_nav):.4f}).")
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/ipo-status")
+async def get_ipo_status():
+    """Get current IPO phase status"""
+    try:
+        ipo_phase = await SystemConfigDB.get('ipo_phase')
+        current_nav = await FundStateDB.get_current_nav_value()
+
+        return {
+            "phase": ipo_phase or 'active',
+            "current_nav": float(current_nav),
+            "pricing_mode": "IPO ($1.00 fixed)" if (ipo_phase == 'active' or not ipo_phase) else f"NAV (${float(current_nav):.4f})"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/calculate-nav")
+async def trigger_nav_calculation(request: CalculateNAVRequest = None):
+    """
+    Manually trigger NAV calculation
+
+    - Calculates daily fees (management + performance)
+    - Updates fund state and HWM
+    - Returns complete calculation breakdown
+    """
+    try:
+        notes = request.notes if request else None
+        result = await calculate_and_save_nav(notes=notes)
+
+        return {
+            "success": True,
+            "calculation_date": result['calculation_date'].isoformat(),
+            "nav_per_token": float(result['nav_per_token']),
+            "nav_before_fees": float(result['nav_before_fees']),
+            "management_fee": float(result['management_fee_amount']),
+            "performance_fee": float(result['performance_fee_amount']),
+            "total_fees": float(result['total_fees_collected']),
+            "fund_hwm": float(result['fund_hwm_after']),
+            "total_tokens": float(result['total_tokens_outstanding']),
+            "message": f"NAV calculated: ${float(result['nav_per_token']):.8f} per token"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/update-balance")
+async def update_trading_balance(request: UpdateBalanceRequest):
+    """
+    Update trading account balance (for testing with placeholder)
+
+    - Sets the manual balance in system_config
+    - Returns new balance
+    """
+    try:
+        if request.balance < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Balance cannot be negative"
+            )
+
+        # Get trading client
+        trading_client = await get_trading_client()
+
+        # Update balance using the client's set_balance method
+        await trading_client.set_balance(Decimal(str(request.balance)))
+
+        # Verify update
+        new_balance = await trading_client.get_balance()
+
+        return {
+            "success": True,
+            "balance": float(new_balance),
+            "message": f"Trading balance updated to ${float(new_balance):,.2f}"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/trading-balance")
+async def get_trading_balance():
+    """Get current trading account balance"""
+    try:
+        trading_client = await get_trading_client()
+        balance = await trading_client.get_balance()
+
+        return {
+            "balance": float(balance),
+            "formatted": f"${float(balance):,.2f}"
+        }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

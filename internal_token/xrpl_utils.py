@@ -413,24 +413,58 @@ def forward_usdc_to_coinbase(amount: Decimal, from_wallet: str = 'deposit') -> D
 @async_compatible
 def send_usdc_to_investor(recipient_address: str, amount: Decimal) -> Dict:
     """
-    Send USDC from Coinbase to investor (for redemptions)
-    
-    Note: This assumes you have USDC in a wallet you control.
-    In production, this would trigger a Coinbase API withdrawal.
+    Send USDC to investor for redemptions
+
+    On testnet: Sends XRP from deposit wallet (where subscription funds accumulate)
+    In production: Would trigger Coinbase API withdrawal to send USDC directly to investor
+
+    Architecture:
+    - Testnet: Uses deposit wallet as proxy for "Coinbase" - this is where XRP deposits go
+    - Production: Would use Coinbase API to withdraw USDC directly to investor's address
     """
     try:
-        # For demo purposes, sending from hot wallet
-        # In production, you'd trigger Coinbase withdrawal
-        
+        # On testnet: Use deposit wallet (acts as "Coinbase" - where funds accumulate)
+        # In production: Replace this entire function with Coinbase API withdrawal
+
         usdc_issuer = os.getenv('USDC_ISSUER_ADDRESS', '')
+
+        # On testnet, if no USDC issuer configured, send XRP as proxy
         if not usdc_issuer:
-            return {
-                "success": False,
-                "error": "USDC issuer address not configured"
-            }
-        
+            print(f"⚠ No USDC issuer configured - sending XRP from deposit wallet")
+            print(f"   Using deposit wallet as Coinbase proxy (where subscription funds are)")
+            print(f"   In production, this would be Coinbase API withdrawal")
+
+            # Send XRP from deposit wallet (convert amount to drops)
+            xrp_drops = str(int(float(amount) * 1_000_000))
+
+            payment_tx = Payment(
+                account=wallet_manager.deposit_wallet.address,
+                destination=recipient_address,
+                amount=xrp_drops
+            )
+
+            response = submit_and_wait(payment_tx, xrpl_client.client, wallet_manager.deposit_wallet)
+            result = response.result["meta"]["TransactionResult"]
+
+            if result == "tesSUCCESS":
+                return {
+                    "success": True,
+                    "tx_hash": response.result["hash"],
+                    "amount": str(amount),
+                    "recipient": recipient_address,
+                    "message": f"Sent {amount} XRP (testnet USDC proxy) from deposit wallet to {recipient_address}"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Transaction failed: {result}",
+                    "result_code": result
+                }
+
+        # Production path: Send real USDC from deposit wallet
+        # Note: In true production, this would be Coinbase API call instead
         payment_tx = Payment(
-            account=wallet_manager.hot_wallet.address,
+            account=wallet_manager.deposit_wallet.address,
             destination=recipient_address,
             amount=IssuedCurrencyAmount(
                 currency="USD",
@@ -438,10 +472,10 @@ def send_usdc_to_investor(recipient_address: str, amount: Decimal) -> Dict:
                 value=str(amount)
             )
         )
-        
-        response = submit_and_wait(payment_tx, xrpl_client.client, wallet_manager.hot_wallet)
+
+        response = submit_and_wait(payment_tx, xrpl_client.client, wallet_manager.deposit_wallet)
         result = response.result["meta"]["TransactionResult"]
-        
+
         if result == "tesSUCCESS":
             return {
                 "success": True,
@@ -456,7 +490,7 @@ def send_usdc_to_investor(recipient_address: str, amount: Decimal) -> Dict:
                 "error": f"Transaction failed: {result}",
                 "result_code": result
             }
-            
+
     except Exception as e:
         return {
             "success": False,

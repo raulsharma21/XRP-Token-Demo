@@ -23,7 +23,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Import our modules
 from database import (
     db, init_database,
-    PurchaseDB, InvestorDB
+    PurchaseDB, InvestorDB, RedemptionDB, FundStateDB, SystemConfigDB
 )
 from xrpl_utils import (
     wallet_manager,
@@ -31,6 +31,8 @@ from xrpl_utils import (
     issue_tokens,
     forward_usdc_to_coinbase
 )
+from redemption_processor import detect_and_process_redemption
+from fee_calculator import calculate_subscription_tokens
 
 load_dotenv()
 
@@ -53,10 +55,11 @@ print(f"Token: {xrpl_config.currency_code}")
 print("=" * 60)
 
 class TransactionMonitor:
-    """Monitors XRPL transactions and processes deposits"""
-    
+    """Monitors XRPL transactions and processes deposits and redemptions"""
+
     def __init__(self):
         self.deposit_address = wallet_manager.deposit_wallet.address
+        self.issuer_address = wallet_manager.cold_wallet.address  # Issuer = cold wallet
         self.running = False
         self.processed_txs = set()  # Track processed transactions
     
@@ -190,12 +193,31 @@ class TransactionMonitor:
                 print(f"   ⊘ Skipping forward (Coinbase not configured for testnet)")
                 forward_tx_hash = None
             
-            # Step 2: Issue tokens to investor
-            print(f"\n2. Issuing tokens to investor...")
-            
-            # For IPO, 1:1 ratio (1 USDC = 1 token)
-            token_amount = usdc_amount
-            
+            # Step 2: Calculate token amount based on current NAV
+            print(f"\n2. Calculating token amount...")
+
+            # Check if IPO is active
+            ipo_phase = await SystemConfigDB.get('ipo_phase')
+            is_ipo_active = ipo_phase == 'active' if ipo_phase else True
+
+            if is_ipo_active:
+                # IPO phase: Fixed $1.00 pricing (1:1 ratio)
+                current_nav = Decimal('1.00')
+                token_amount = usdc_amount
+                print(f"   IPO phase: Using fixed $1.00 pricing")
+            else:
+                # Post-IPO: Use current NAV
+                current_nav = await FundStateDB.get_current_nav_value()
+                token_amount = calculate_subscription_tokens(usdc_amount, current_nav)
+                print(f"   Post-IPO: Using dynamic NAV ${current_nav:.8f}")
+
+            print(f"   USDC: ${usdc_amount}")
+            print(f"   NAV: ${current_nav:.8f}")
+            print(f"   Tokens to issue: {token_amount}")
+
+            # Step 3: Issue tokens to investor
+            print(f"\n3. Issuing tokens to investor...")
+
             issue_result = await issue_tokens(investor['xrpl_address'], token_amount)
             
             if issue_result['success']:
@@ -234,7 +256,94 @@ class TransactionMonitor:
             print(f"✗ Error processing deposit: {e}")
             import traceback
             traceback.print_exc()
-    
+
+    async def process_token_redemption(self, message: dict):
+        """
+        Process incoming IND token redemption
+
+        Steps:
+        1. Find matching redemption record by destination tag
+        2. Verify token amount
+        3. Calculate USDC owed (tokens × NAV)
+        4. Send USDC to investor
+        5. Update redemption status
+        """
+        try:
+            # Extract transaction details
+            tx = message.get('tx_json') or message.get('transaction')
+            if not tx:
+                print("✗ No transaction data in message")
+                return
+
+            tx_hash = message.get('hash')
+            amount_data = tx.get('Amount') or tx.get('DeliverMax')
+            destination = tx.get('Destination')
+            destination_tag = tx.get('DestinationTag')
+            sender = tx.get('Account')
+
+            print(f"\n{'='*60}")
+            print(f"Processing redemption transaction: {tx_hash}")
+            print(f"{'='*60}")
+
+            # Verify it's to our issuer wallet
+            if destination != self.issuer_address:
+                print(f"⊘ Not for issuer wallet, skipping")
+                return
+
+            # Check if already processed
+            if tx_hash in self.processed_txs:
+                print(f"⊘ Already processed, skipping")
+                return
+
+            # Parse amount - should be IND tokens
+            if isinstance(amount_data, dict):
+                currency = amount_data.get('currency')
+                issuer = amount_data.get('issuer')
+                value = amount_data.get('value')
+
+                print(f"Amount: {value} {currency}")
+                print(f"Issuer: {issuer}")
+                print(f"From: {sender}")
+                print(f"Destination Tag: {destination_tag}")
+
+                # Verify it's IND tokens
+                if currency != xrpl_config.currency_code:
+                    print(f"⊘ Wrong currency (expected {xrpl_config.currency_code}, got {currency})")
+                    return
+
+                if issuer != self.issuer_address:
+                    print(f"⊘ Wrong issuer (expected {self.issuer_address}, got {issuer})")
+                    return
+
+                token_amount = Decimal(value)
+
+            else:
+                # XRP payment - not a redemption
+                print(f"⊘ XRP payment, not a token redemption")
+                return
+
+            # Process redemption via redemption_processor
+            success = await detect_and_process_redemption(
+                tx_hash=tx_hash,
+                sender=sender,
+                destination=destination,
+                destination_tag=destination_tag,
+                token_amount=token_amount,
+                issuer_address=self.issuer_address
+            )
+
+            if success:
+                # Mark as processed
+                self.processed_txs.add(tx_hash)
+                print(f"\n✓ Redemption processed successfully")
+            else:
+                print(f"\n✗ Redemption processing failed - may need manual intervention")
+
+        except Exception as e:
+            print(f"✗ Error processing redemption: {e}")
+            import traceback
+            traceback.print_exc()
+
     async def handle_transaction(self, message: dict):
         """Handle incoming transaction from websocket"""
         try:
@@ -279,9 +388,18 @@ class TransactionMonitor:
                 print(f"⊘ Transaction failed: {result}")
                 return
             
-            print(f"DEBUG: Calling process_usdc_deposit...")
-            # Process the deposit (pass the full message)
-            await self.process_usdc_deposit(message)
+            # Route based on destination
+            tx = message.get('tx_json') or message.get('transaction')
+            destination = tx.get('Destination')
+
+            if destination == self.deposit_address:
+                print(f"DEBUG: Routing to USDC deposit handler...")
+                await self.process_usdc_deposit(message)
+            elif destination == self.issuer_address:
+                print(f"DEBUG: Routing to redemption handler...")
+                await self.process_token_redemption(message)
+            else:
+                print(f"DEBUG: Transaction not for monitored wallets, skipping")
             
         except Exception as e:
             print(f"Error handling transaction: {e}")
@@ -297,14 +415,17 @@ class TransactionMonitor:
         async with AsyncWebsocketClient(WS_URL) as client:
             print(f"✓ Connected to XRPL")
             
-            # Subscribe to deposit wallet transactions
+            # Subscribe to both deposit wallet (for subscriptions) and issuer wallet (for redemptions)
             subscribe_request = Subscribe(
-                accounts=[self.deposit_address]
+                accounts=[self.deposit_address, self.issuer_address]
             )
-            
+
             await client.send(subscribe_request)
-            print(f"✓ Subscribed to {self.deposit_address}")
-            print(f"\n🔍 Monitoring for incoming deposits...")
+            print(f"✓ Subscribed to deposit wallet: {self.deposit_address}")
+            print(f"✓ Subscribed to issuer wallet: {self.issuer_address}")
+            print(f"\n🔍 Monitoring for:")
+            print(f"   - USDC deposits (subscriptions)")
+            print(f"   - IND token payments (redemptions)")
             print(f"   Press Ctrl+C to stop\n")
             
             self.running = True
