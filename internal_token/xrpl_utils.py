@@ -413,26 +413,26 @@ def forward_usdc_to_coinbase(amount: Decimal, from_wallet: str = 'deposit') -> D
 @async_compatible
 def send_usdc_to_investor(recipient_address: str, amount: Decimal) -> Dict:
     """
-    Send USDC to investor for redemptions
+    Send redemption payout to investor
 
-    On testnet: Sends XRP from deposit wallet (where subscription funds accumulate)
-    In production: Would trigger Coinbase API withdrawal to send USDC directly to investor
-
-    Architecture:
-    - Testnet: Uses deposit wallet as proxy for "Coinbase" - this is where XRP deposits go
-    - Production: Would use Coinbase API to withdraw USDC directly to investor's address
+    TESTNET PLACEHOLDER: Uses deposit wallet as a proxy to simulate payout.
+    In production, redemption payouts are NOT sent live — they are batched
+    and processed by the trading account at end of day (EOD):
+      1. Trading account calculates total redemptions for the day
+      2. Converts USD -> XRP via Coinbase
+      3. Sends XRP directly to each investor wallet
     """
     try:
-        # On testnet: Use deposit wallet (acts as "Coinbase" - where funds accumulate)
-        # In production: Replace this entire function with Coinbase API withdrawal
+        # TESTNET PLACEHOLDER — deposit wallet used as proxy for EOD payout simulation
+        # In production: trading account batches and processes all redemptions at EOD
 
         usdc_issuer = os.getenv('USDC_ISSUER_ADDRESS', '')
 
         # On testnet, if no USDC issuer configured, send XRP as proxy
         if not usdc_issuer:
-            print(f"⚠ No USDC issuer configured - sending XRP from deposit wallet")
-            print(f"   Using deposit wallet as Coinbase proxy (where subscription funds are)")
-            print(f"   In production, this would be Coinbase API withdrawal")
+            print(f"⚠ TESTNET PLACEHOLDER: Sending XRP from deposit wallet")
+            print(f"   In production: trading account processes redemptions at EOD")
+            print(f"   (batch convert USD -> XRP via Coinbase, then send to each investor)")
 
             # Send XRP from deposit wallet (convert amount to drops)
             xrp_drops = str(int(float(amount) * 1_000_000))
