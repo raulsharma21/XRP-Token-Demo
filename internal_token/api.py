@@ -409,14 +409,6 @@ async def initiate_purchase(request: PurchaseInitiateRequest):
     - Purchase will be auto-processed when deposit is detected
     """
     try:
-        # Check IPO phase is active
-        ipo_active = await SystemConfigDB.is_ipo_active()
-        if not ipo_active:
-            raise HTTPException(
-                status_code=403,
-                detail="IPO phase is closed. Use secondary market for trading."
-            )
-        
         # Verify investor
         investor = await InvestorDB.get_by_id(request.investor_id)
         if not investor:
