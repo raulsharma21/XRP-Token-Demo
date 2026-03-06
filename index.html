@@ -128,16 +128,16 @@
                     <span class="price" id="currentNAV">-</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-label">Total Fund Value</span>
+                    <span class="stat-label">Last NAV Calculation</span>
+                    <span class="stat-value" id="lastCalculation">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Fund AUM</span>
                     <span class="stat-value" id="totalFundValue">-</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">Total Tokens Outstanding</span>
                     <span class="stat-value" id="tokensOutstanding">-</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Last NAV Calculation</span>
-                    <span class="stat-value" id="lastCalculation">-</span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">Next Calculation</span>
@@ -341,7 +341,7 @@
 
             <div class="message info" style="margin-bottom: 15px;">
                 <strong>Exit the Fund</strong><br>
-                Redeem your IND tokens to receive USDC based on the current NAV. Connect your wallet or enter your investor details.
+                Redeem your IND tokens to receive XRP based on the current NAV. Connect your wallet or enter your investor details.
             </div>
 
             <!-- Xaman Redemption Flow -->
@@ -544,6 +544,9 @@
         const XAMAN_API_KEY = '4f521c1c-055c-44ba-a1ef-3f4b09622c59';
         const TOKEN_CODE = 'IND';
         const TOKEN_ISSUER = 'rPgKtAP6JS3ZQpBfmE22v7xsfE6fnF46ok';
+        
+        // LOCAL ADMIN ACCESS - Set to true for temporary local admin access
+        const LOCAL_ADMIN_ENABLED = true;
         
         let currentQuote = null;
         let xumm = null;
@@ -1076,7 +1079,7 @@
                 const res = await fetch(`${API_BASE}/buy/initiate`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({investor_id: investorId, usdc_amount: amount})
+                    body: JSON.stringify({investor_id: investorId, currency_amount: amount})
                 });
                 const data = await res.json();
                 
@@ -1161,7 +1164,7 @@
                 const res = await fetch(`${API_BASE}/buy/initiate`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({investor_id: investorId, usdc_amount: amount})
+                    body: JSON.stringify({investor_id: investorId, currency_amount: amount})
                 });
                 const data = await res.json();
                 
@@ -1707,7 +1710,7 @@
                         <span style="color: #94a3b8;">Redemption ID:</span> <code>${data.redemption_id}</code><br>
                         <span style="color: #94a3b8;">Tokens to Send:</span> <code>${data.token_amount} IND</code><br>
                         <span style="color: #94a3b8;">Current NAV:</span> <code>$${data.current_nav.toFixed(8)}</code><br>
-                        <span style="color: #94a3b8;">Estimated USDC:</span> <code style="color: #10b981;">$${data.estimated_usdc.toFixed(2)}</code><br><br>
+                        <span style="color: #94a3b8;">Estimated Value:</span> <code style="color: #10b981;">$${data.estimated_value.toFixed(2)}</code><br><br>
                     </div>
                     <div class="trust-info">
                         <strong style="color: #60a5fa;">Send Tokens To:</strong><br><br>
@@ -1842,7 +1845,7 @@
                         <span style="color: #94a3b8;">Redemption ID:</span> <code>${data.redemption_id}</code><br>
                         <span style="color: #94a3b8;">Tokens to Send:</span> <code>${data.token_amount} IND</code><br>
                         <span style="color: #94a3b8;">Current NAV:</span> <code>$${data.current_nav.toFixed(8)}</code><br>
-                        <span style="color: #94a3b8;">Estimated XRP:</span> <code style="color: #10b981;">$${data.estimated_usdc.toFixed(2)}</code><br><br>
+                        <span style="color: #94a3b8;">Estimated Value:</span> <code style="color: #10b981;">$${data.estimated_value.toFixed(2)}</code><br><br>
                     </div>
                     <div class="trust-info">
                         <strong style="color: #60a5fa;">Send Tokens From Your Wallet:</strong><br><br>
@@ -1894,7 +1897,7 @@
                         <strong>Redemption Status:</strong> ${data.status.toUpperCase()}<br><br>
                         <strong>Tokens:</strong> ${data.token_amount} IND<br>
                         ${data.nav_price ? `<strong>NAV Used:</strong> $${data.nav_price}<br>` : ''}
-                        ${data.usdc_amount ? `<strong>USDC Received:</strong> $${data.usdc_amount.toFixed(2)}<br>` : ''}
+                        ${data.currency_amount ? `<strong>Currency Received:</strong> $${data.currency_amount.toFixed(2)}<br>` : ''}
                         ${data.redemption_tx_hash ? `<strong>Payment TX:</strong> <code>${data.redemption_tx_hash}</code><br>` : ''}
                         ${data.burn_tx_hash ? `<strong>Burn TX:</strong> <code>${data.burn_tx_hash}</code><br>` : ''}
                     </div>
@@ -1910,9 +1913,10 @@
         // Load admin panel status
         async function loadAdminStatus() {
             try {
+                const headers = LOCAL_ADMIN_ENABLED ? {'X-Local-Admin': 'true'} : {};
                 const [ipoRes, balanceRes] = await Promise.all([
-                    fetch(`${API_BASE}/admin/ipo-status`),
-                    fetch(`${API_BASE}/admin/trading-balance`)
+                    fetch(`${API_BASE}/admin/ipo-status`, { headers }),
+                    fetch(`${API_BASE}/admin/trading-balance`, { headers })
                 ]);
 
                 const ipoData = await ipoRes.json();
@@ -1937,9 +1941,12 @@
             msgEl.innerHTML = '<div class="message info">Updating IPO phase...</div>';
 
             try {
+                const headers = {'Content-Type': 'application/json'};
+                if (LOCAL_ADMIN_ENABLED) headers['X-Local-Admin'] = 'true';
+                
                 const res = await fetch(`${API_BASE}/admin/toggle-ipo`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: headers,
                     body: JSON.stringify({phase})
                 });
 
@@ -1965,9 +1972,12 @@
             display.innerHTML = '<div class="message info">Calculating NAV... This may take a few seconds.</div>';
 
             try {
+                const headers = {'Content-Type': 'application/json'};
+                if (LOCAL_ADMIN_ENABLED) headers['X-Local-Admin'] = 'true';
+                
                 const res = await fetch(`${API_BASE}/admin/calculate-nav`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: headers,
                     body: JSON.stringify({notes: notes || null})
                 });
 
@@ -2011,9 +2021,12 @@
             msgEl.innerHTML = '<div class="message info">Updating balance...</div>';
 
             try {
+                const headers = {'Content-Type': 'application/json'};
+                if (LOCAL_ADMIN_ENABLED) headers['X-Local-Admin'] = 'true';
+                
                 const res = await fetch(`${API_BASE}/admin/update-balance`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: headers,
                     body: JSON.stringify({balance})
                 });
 
